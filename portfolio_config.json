@@ -1,0 +1,17 @@
+{
+  "currency_note": "Use each security's trading currency: USD for US stocks and AUD for ASX stocks.",
+  "near_threshold_percent": 3,
+  "holdings": {
+    "NVDA": { "buy_price": null, "take_profit_price": null },
+    "MU": { "buy_price": null, "take_profit_price": null },
+    "QCOM": { "buy_price": null, "take_profit_price": null },
+    "TSLA": { "buy_price": null, "take_profit_price": null },
+    "CBA.AX": { "buy_price": null, "take_profit_price": null },
+    "WTC.AX": { "buy_price": null, "take_profit_price": null },
+    "TLX.AX": { "buy_price": null, "take_profit_price": null }
+  },
+  "wechat": {
+    "provider": "ServerChan Turbo",
+    "sendkey_env": "SERVERCHAN_SENDKEY"
+  }
+}

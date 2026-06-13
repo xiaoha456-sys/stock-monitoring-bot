@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "updated_at": "",
+  "thresholds": {
+    "buy": 72,
+    "watch": 58,
+    "hold": 45,
+    "reduce": 32
+  },
+  "price_levels": {
+    "buy_low_atr": 0.6,
+    "buy_high_atr": 0.2,
+    "target_atr": 2.5,
+    "target_atr_neutral": 1.2,
+    "stop_atr": 2.0,
+    "stop_max_drawdown_pct": 0.08
+  },
+  "markets": {
+    "CN": {
+      "score_blend": {
+        "screen": 0.55,
+        "technical": 0.45
+      },
+      "alphasift_strategy": "volume_breakout"
+    }
+  }
+}

@@ -1,5 +1,11 @@
+.env
 .venv/
+.venv312/
+data/alphasift/
+data/predictions/
+data/tuning_history.jsonl
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .DS_Store
+.vendor/

@@ -1,17 +1,154 @@
 {
-  "currency_note": "Use each security's trading currency: USD for US stocks and AUD for ASX stocks.",
-  "near_threshold_percent": 3,
-  "holdings": {
-    "NVDA": { "buy_price": null, "take_profit_price": null },
-    "MU": { "buy_price": null, "take_profit_price": null },
-    "QCOM": { "buy_price": null, "take_profit_price": null },
-    "TSLA": { "buy_price": null, "take_profit_price": null },
-    "CBA.AX": { "buy_price": null, "take_profit_price": null },
-    "WTC.AX": { "buy_price": null, "take_profit_price": null },
-    "TLX.AX": { "buy_price": null, "take_profit_price": null }
+  "currency_note": "Use each security's trading currency: USD for US stocks, CNY for A-shares, AUD for ASX stocks.",
+  "review_horizons_days": [1, 5, 20],
+  "market_indices": {
+    "US": { "ticker": "SPY", "name": "标普500 (SPY)" },
+    "CN": { "ticker": "000001.SS", "name": "上证指数" },
+    "AU": { "ticker": "^AXJO", "name": "ASX 200" }
   },
-  "wechat": {
-    "provider": "ServerChan Turbo",
-    "sendkey_env": "SERVERCHAN_SENDKEY"
+  "iteration": {
+    "enabled": true,
+    "auto_apply": true,
+    "primary_horizon_days": 5,
+    "min_samples_per_market": 5,
+    "target_hit_rate": 0.6,
+    "target_avg_score": 65,
+    "max_adjustment_per_run": 2,
+    "alphasift_strategy_rotation": [
+      "volume_breakout",
+      "capital_heat",
+      "momentum_quality",
+      "balanced_alpha"
+    ],
+    "alphasift_evaluate_limit": 10,
+    "external_skills": {
+      "alphasift_evaluate": true,
+      "alphasift_save_runs": true
+    }
+  },
+  "markets": {
+    "US": {
+      "label": "美股",
+      "emoji": "🇺🇸",
+      "push_title": "美股每日投资简报",
+      "top_n": 3,
+      "watchlist": [
+        "NVDA", "MU", "QCOM", "TSLA", "AMD", "MSFT", "AAPL", "GOOGL", "META", "AMZN",
+        "AVGO", "SMCI", "PLTR", "COIN", "ARM"
+      ],
+      "quant_screen": {
+        "enabled": true,
+        "strategy": "volume_breakout"
+      }
+    },
+    "CN": {
+      "label": "A股",
+      "emoji": "🇨🇳",
+      "push_title": "A股每日投资简报",
+      "top_n": 3,
+      "watchlist": [
+        "600519.SS", "000858.SZ", "600036.SS", "601318.SS", "300750.SZ",
+        "002594.SZ", "600900.SS", "000333.SZ", "601012.SS", "688981.SS"
+      ],
+      "alphasift": {
+        "enabled": true,
+        "strategy": "volume_breakout",
+        "max_output": 12,
+        "use_llm": false,
+        "fallback_to_watchlist": true,
+        "merge_fallback_watchlist": false,
+        "diversify": {
+          "enabled": true,
+          "max_per_bucket": 1,
+          "buckets": {
+            "金融": 1
+          }
+        },
+        "score_blend": {
+          "screen": 0.55,
+          "technical": 0.45
+        }
+      }
+    },
+    "AU": {
+      "label": "澳股",
+      "emoji": "🇦🇺",
+      "push_title": "澳股每日投资简报",
+      "top_n": 2,
+      "watchlist": [
+        "CBA.AX", "WTC.AX", "TLX.AX", "BHP.AX", "CSL.AX", "FMG.AX", "WDS.AX", "XRO.AX"
+      ],
+      "quant_screen": {
+        "enabled": true,
+        "strategy": "volume_breakout"
+      }
+    }
+  },
+  "holdings": {
+    "NVDA": { "name": "英伟达", "market": "US", "buy_price": null, "take_profit_price": null },
+    "MU": { "name": "美光", "market": "US", "buy_price": null, "take_profit_price": null },
+    "RKLB": { "name": "Rocket Lab", "market": "US", "buy_price": null, "take_profit_price": null },
+    "TLX.AX": { "name": "Telix", "market": "AU", "buy_price": null, "take_profit_price": null },
+    "RMD.AX": { "name": "ResMed", "market": "AU", "buy_price": null, "take_profit_price": null },
+    "WTC.AX": { "name": "WiseTech", "market": "AU", "buy_price": null, "take_profit_price": null },
+    "002402.SZ": { "name": "和而泰", "market": "CN", "buy_price": null, "take_profit_price": null },
+    "600406.SS": { "name": "国电南瑞", "market": "CN", "buy_price": null, "take_profit_price": null },
+    "002065.SZ": { "name": "东华软件", "market": "CN", "buy_price": null, "take_profit_price": null }
+  },
+  "social_sentiment": {
+    "enabled": true,
+    "include_in_combined_report": true,
+    "price_levels": {
+      "enabled": true
+    },
+    "reddit": {
+      "enabled": true,
+      "apewisdom_filter": "all-stocks",
+      "top_n": 10
+    },
+    "x": {
+      "enabled": true,
+      "bearer_token_env": "TWITTER_BEARER_TOKEN",
+      "top_n": 10,
+      "max_results": 100,
+      "influencers": [
+        "unusual_whales",
+        "DeItaone",
+        "Fxhedgers",
+        "StockMKTNewz",
+        "zerohedge",
+        "jimcramer",
+        "chamath",
+        "ARKInvest",
+        "elerianm",
+        "MacroAlf"
+      ]
+    },
+    "serenity": {
+      "enabled": true,
+      "handle": "aleabitoreddit",
+      "days_ago": 2,
+      "include_in_combined_report": true
+    }
+  },
+  "notifications": {
+    "channels": ["email"],
+    "merge_markets": true,
+    "combined_title": "每日持仓操作简报",
+    "email": {
+      "smtp_host_env": "SMTP_HOST",
+      "smtp_port_env": "SMTP_PORT",
+      "smtp_port_default": 465,
+      "smtp_user_env": "SMTP_USER",
+      "smtp_password_env": "SMTP_PASSWORD",
+      "from_env": "EMAIL_FROM",
+      "to_env": "EMAIL_TO",
+      "use_ssl": true,
+      "use_tls": false
+    },
+    "wechat": {
+      "provider": "ServerChan Turbo",
+      "sendkey_env": "SERVERCHAN_SENDKEY"
+    }
   }
 }

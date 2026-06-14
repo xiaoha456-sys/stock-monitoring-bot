@@ -86,15 +86,101 @@
     }
   },
   "holdings": {
-    "NVDA": { "name": "英伟达", "market": "US", "buy_price": null, "take_profit_price": null },
-    "MU": { "name": "美光", "market": "US", "buy_price": null, "take_profit_price": null },
-    "RKLB": { "name": "Rocket Lab", "market": "US", "buy_price": null, "take_profit_price": null },
-    "TLX.AX": { "name": "Telix", "market": "AU", "buy_price": null, "take_profit_price": null },
-    "RMD.AX": { "name": "ResMed", "market": "AU", "buy_price": null, "take_profit_price": null },
-    "WTC.AX": { "name": "WiseTech", "market": "AU", "buy_price": null, "take_profit_price": null },
-    "002402.SZ": { "name": "和而泰", "market": "CN", "buy_price": null, "take_profit_price": null },
-    "600406.SS": { "name": "国电南瑞", "market": "CN", "buy_price": null, "take_profit_price": null },
-    "002065.SZ": { "name": "东华软件", "market": "CN", "buy_price": null, "take_profit_price": null }
+    "NVDA": {
+      "name": "英伟达",
+      "market": "US",
+      "shares": null,
+      "cost_basis": null,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "AI 算力核心持仓",
+      "max_weight_pct": null
+    },
+    "MU": {
+      "name": "美光",
+      "market": "US",
+      "shares": null,
+      "cost_basis": null,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "HBM 存储周期",
+      "max_weight_pct": null
+    },
+    "RKLB": {
+      "name": "Rocket Lab",
+      "market": "US",
+      "shares": null,
+      "cost_basis": null,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "商业航天发射",
+      "max_weight_pct": null
+    },
+    "TLX.AX": {
+      "name": "Telix",
+      "market": "AU",
+      "shares": null,
+      "cost_basis": null,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "核医学诊疗",
+      "max_weight_pct": null
+    },
+    "RMD.AX": {
+      "name": "ResMed",
+      "market": "AU",
+      "shares": null,
+      "cost_basis": null,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "睡眠呼吸设备",
+      "max_weight_pct": null
+    },
+    "WTC.AX": {
+      "name": "WiseTech",
+      "market": "AU",
+      "shares": null,
+      "cost_basis": null,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "全球物流软件",
+      "max_weight_pct": null
+    },
+    "002402.SZ": {
+      "name": "和而泰",
+      "market": "CN",
+      "shares": null,
+      "cost_basis": null,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "智能控制器",
+      "max_weight_pct": null
+    },
+    "600406.SS": {
+      "name": "国电南瑞",
+      "market": "CN",
+      "shares": null,
+      "cost_basis": null,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "电网自动化",
+      "max_weight_pct": null
+    },
+    "002065.SZ": {
+      "name": "东华软件",
+      "market": "CN",
+      "shares": null,
+      "cost_basis": null,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "政企数字化",
+      "max_weight_pct": null
+    }
+  },
+  "portfolio": {
+    "max_market_weight_pct": 55,
+    "max_position_weight_pct": 25,
+    "earnings_alert_days": 14
   },
   "social_sentiment": {
     "enabled": true,

@@ -295,6 +295,8 @@ class StockBotTests(unittest.TestCase):
         self.assertIn("每日持仓操作简报", combined)
         self.assertIn("## 📌 今日结论", combined)
         self.assertIn("## 附录：技术详情", combined)
+        self.assertIn("## 📊 持仓管家", combined)
+        self.assertNotIn("## 💼 持仓今日操作指南", combined)
         self.assertIn("## 🇺🇸 美股", combined)
         self.assertIn("## 🇨🇳 A股", combined)
         self.assertIn("## 🇦🇺 澳股", combined)

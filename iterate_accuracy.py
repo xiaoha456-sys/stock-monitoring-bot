@@ -175,7 +175,18 @@ def propose_adjustments(
     target_hit_rate = float(config.get("target_hit_rate", 0.6))
     target_avg_score = float(config.get("target_avg_score", 65))
     min_samples = int(config.get("min_samples_per_market", 5))
+    min_total = int(config.get("min_total_samples", 10))
     max_step = float(config.get("max_adjustment_per_run", 2))
+
+    total_samples = sum(int(bucket.get("count", 0) or 0) for bucket in stats.values())
+    if total_samples < min_total:
+        return [
+            {
+                "market": "ALL",
+                "action": "skip",
+                "reason": f"全局样本不足（{total_samples}/{min_total}），本次不调整模型参数",
+            }
+        ]
 
     thresholds = tuning["thresholds"]
     price_levels = tuning["price_levels"]
@@ -247,7 +258,7 @@ def propose_adjustments(
         if market_key == "CN":
             changes.extend(_propose_cn_adjustments(bucket, tuning, config))
 
-    return [item for item in changes if item.get("action") != "skip"]
+    return changes
 
 
 def _propose_cn_adjustments(
@@ -394,8 +405,17 @@ def format_iteration_report(
 
     lines.extend(["", "## 本次调整", ""])
     actionable = [item for item in changes if item.get("action") == "set"]
+    skipped = [item for item in changes if item.get("action") == "skip"]
+    if skipped:
+        lines.append("**未调整（样本不足）**")
+        lines.append("")
+        for item in skipped:
+            market = item.get("market", "")
+            lines.append(f"- {market}：{item.get('reason', '')}")
+        lines.append("")
     if not actionable:
-        lines.append("_无参数调整。_")
+        if not skipped:
+            lines.append("_无参数调整。_")
     else:
         for item in actionable:
             lines.append(

@@ -293,6 +293,8 @@ class StockBotTests(unittest.TestCase):
         combined = build_combined_report(reports, now=now)
 
         self.assertIn("每日持仓操作简报", combined)
+        self.assertIn("## 📌 今日结论", combined)
+        self.assertIn("## 附录：技术详情", combined)
         self.assertIn("## 🇺🇸 美股", combined)
         self.assertIn("## 🇨🇳 A股", combined)
         self.assertIn("## 🇦🇺 澳股", combined)

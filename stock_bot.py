@@ -991,62 +991,16 @@ def build_combined_report(
     social: Any | None = None,
     serenity: Any | None = None,
 ) -> str:
-    report_time = (now or datetime.now(SYDNEY)).astimezone(SYDNEY)
-    lines = [
-        f"# {_combined_report_title()}",
-        f"**{report_time:%Y-%m-%d %H:%M}** 悉尼时间",
-        "",
-        "> 优先阅读持仓今日操作指南；以下为各市场观察池参考推荐。三市场统一使用放量突破量化策略。仅供研究，不构成投资建议。",
-        "",
-    ]
-    if regimes:
-        lines.append(format_regime_overview(regimes))
-        lines.append("---")
-        lines.append("")
+    from morning_brief import compose_morning_brief
 
-    if holdings is not None:
-        holding_recs, holding_errors = holdings
-        if holding_recs or holding_errors:
-            lines.extend(format_holdings_section(holding_recs, holding_errors, regimes=regimes))
-            lines.extend(["---", ""])
-
-    if social is not None:
-        from social_sentiment import format_social_section
-
-        lines.extend(format_social_section(social))
-        lines.extend(["---", ""])
-
-    if serenity is not None:
-        from serenity_digest import format_serenity_section
-
-        lines.extend(format_serenity_section(serenity))
-        lines.extend(["---", ""])
-
-    included = [key for key in MARKET_ORDER if key in market_reports]
-    if included:
-        lines.extend(
-            [
-                "## 观察池参考（非持仓）",
-                "",
-                "> 各市场观察池中的优选标的，策略与持仓分析一致，供拓展参考。",
-                "",
-            ]
-        )
-    for index, market_key in enumerate(included):
-        picks, others, errors, extras = market_reports[market_key]
-        notes = [_regime_section_note(extras), _market_section_note(market_key, extras)]
-        section_note = " ".join(note for note in notes if note)
-        lines.extend(_market_section_lines(market_key, picks, others, errors, section_note))
-        if index < len(included) - 1:
-            lines.extend(["", "---", ""])
-
-    lines.extend(
-        [
-            "",
-            "**提示**：优先在建议买入区间内分批建仓；触及止损参考位需重新评估。",
-        ]
+    return compose_morning_brief(
+        market_reports,
+        now=now,
+        regimes=regimes,
+        holdings=holdings,
+        social=social,
+        serenity=serenity,
     )
-    return "\n".join(lines)
 
 
 def scan_market(

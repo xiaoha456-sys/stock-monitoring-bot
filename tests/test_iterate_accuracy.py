@@ -14,7 +14,7 @@ class IterateAccuracyTests(unittest.TestCase):
     def test_propose_adjustments_tightens_when_hit_rate_low(self):
         stats = {
             "US": {
-                "count": 8,
+                "count": 12,
                 "hit_rate": 0.25,
                 "avg_score": 40,
                 "stop_rate": 0.1,
@@ -25,12 +25,36 @@ class IterateAccuracyTests(unittest.TestCase):
             "target_hit_rate": 0.6,
             "target_avg_score": 65,
             "min_samples_per_market": 5,
+            "min_total_samples": 10,
             "max_adjustment_per_run": 2,
             "alphasift_strategy_rotation": [],
         }
         changes = propose_adjustments(stats, tuning, config)
         self.assertTrue(any(item.get("path") == "thresholds.buy" for item in changes))
         self.assertGreater(tuning["thresholds"]["buy"], 72)
+
+    def test_propose_adjustments_skips_when_total_samples_insufficient(self):
+        stats = {
+            "US": {
+                "count": 3,
+                "hit_rate": 0.2,
+                "avg_score": 40,
+                "stop_rate": 0.1,
+            }
+        }
+        tuning = json.loads(json.dumps(DEFAULT_TUNING))
+        config = {
+            "target_hit_rate": 0.6,
+            "target_avg_score": 65,
+            "min_samples_per_market": 5,
+            "min_total_samples": 10,
+            "max_adjustment_per_run": 2,
+            "alphasift_strategy_rotation": [],
+        }
+        changes = propose_adjustments(stats, tuning, config)
+        self.assertEqual(changes[0]["action"], "skip")
+        self.assertIn("全局样本不足", changes[0]["reason"])
+        self.assertEqual(tuning["thresholds"]["buy"], 72)
 
     @patch("iterate_accuracy._fetch_price_range")
     def test_collect_market_stats_grades_saved_predictions(self, fetch_range):

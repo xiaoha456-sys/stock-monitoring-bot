@@ -1,6 +1,6 @@
 {
   "currency_note": "Use each security's trading currency: USD for US stocks, CNY for A-shares, AUD for ASX stocks.",
-  "review_horizons_days": [1, 5, 20],
+  "review_horizons_days": [5, 20, 60],
   "market_indices": {
     "US": { "ticker": "SPY", "name": "标普500 (SPY)" },
     "CN": { "ticker": "000001.SS", "name": "上证指数" },
@@ -11,6 +11,7 @@
     "auto_apply": true,
     "primary_horizon_days": 5,
     "min_samples_per_market": 5,
+    "min_total_samples": 10,
     "target_hit_rate": 0.6,
     "target_avg_score": 65,
     "max_adjustment_per_run": 2,

@@ -345,6 +345,8 @@ def compose_morning_brief(
     holdings: tuple[list[Recommendation], dict[str, str]] | None = None,
     social: Any | None = None,
     serenity: Any | None = None,
+    potential: tuple[list[Any], dict[str, str]] | None = None,
+    research: list[Any] | None = None,
 ) -> str:
     from zoneinfo import ZoneInfo
 
@@ -370,6 +372,17 @@ def compose_morning_brief(
     lines.extend(["---", ""])
     lines.extend(format_research_candidates_section(verdict["quality_picks"]))
     lines.extend(["---", ""])
+    if potential is not None:
+        from potential_screener import format_potential_radar_section
+
+        picks, errors = potential
+        lines.extend(format_potential_radar_section(picks, errors))
+        lines.extend(["---", ""])
+    if research:
+        from research_agent import format_research_agent_section
+
+        lines.extend(format_research_agent_section(research))
+        lines.extend(["---", ""])
     lines.extend(format_risk_section(verdict, regimes, market_reports, social))
     lines.extend(["---", ""])
     lines.extend(format_price_table_section(analysis, verdict["quality_picks"]))

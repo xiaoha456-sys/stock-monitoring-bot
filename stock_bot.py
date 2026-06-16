@@ -990,6 +990,8 @@ def build_combined_report(
     holdings: tuple[list[Recommendation], dict[str, str]] | None = None,
     social: Any | None = None,
     serenity: Any | None = None,
+    potential: tuple[list[Any], dict[str, str]] | None = None,
+    research: list[Any] | None = None,
 ) -> str:
     from morning_brief import compose_morning_brief
 
@@ -1000,6 +1002,8 @@ def build_combined_report(
         holdings=holdings,
         social=social,
         serenity=serenity,
+        potential=potential,
+        research=research,
     )
 
 
@@ -1638,6 +1642,16 @@ def parse_args() -> argparse.Namespace:
         help="Summarize @aleabitoreddit (Serenity) posts from N days ago.",
     )
     parser.add_argument(
+        "--potential",
+        action="store_true",
+        help="Scan for early-stage high-potential stocks (pre-parabolic phase).",
+    )
+    parser.add_argument(
+        "--research",
+        action="store_true",
+        help="Link potential radar picks with Serenity supply-chain research.",
+    )
+    parser.add_argument(
         "--market",
         choices=["all", *MARKET_ORDER],
         default="all",
@@ -1717,6 +1731,39 @@ def main() -> int:
         print(f"Serenity digest sent via: {', '.join(delivered)}.")
         return 0
 
+    if args.potential:
+        from potential_screener import format_potential_radar_section, scan_potential_radar
+
+        markets = [args.market] if args.market != "all" else None
+        picks, errors = scan_potential_radar(markets=markets)
+        report = "\n".join(format_potential_radar_section(picks, errors))
+        print(report)
+        if args.dry_run:
+            return 0
+        delivered = send_report("潜力雷达", report, channels=_channel_override(args))
+        print(f"Potential radar sent via: {', '.join(delivered)}.")
+        return 0
+
+    if args.research:
+        from potential_screener import scan_potential_radar
+        from research_agent import build_research_briefs, format_research_agent_section
+        from serenity_digest import build_serenity_digest
+
+        markets = [args.market] if args.market != "all" else None
+        picks, errors = scan_potential_radar(markets=markets)
+        serenity = build_serenity_digest()
+        briefs = build_research_briefs(picks, serenity)
+        lines = format_research_agent_section(briefs)
+        if errors:
+            lines.extend(["", f"_扫描异常 {len(errors)} 只。_", ""])
+        report = "\n".join(lines)
+        print(report)
+        if args.dry_run:
+            return 0
+        delivered = send_report("研究 Agent 简报", report, channels=_channel_override(args))
+        print(f"Research agent report sent via: {', '.join(delivered)}.")
+        return 0
+
     markets = [args.market] if args.market != "all" else list(MARKET_ORDER)
     market_reports: dict[
         str, tuple[list[Recommendation], list[Recommendation], dict[str, str], dict[str, Any]]
@@ -1747,6 +1794,25 @@ def main() -> int:
 
         serenity_digest = build_serenity_digest(days_ago=int(serenity_cfg.get("days_ago", 2)))
 
+    potential_scan = None
+    potential_cfg = load_config().get("potential_radar", {})
+    if potential_cfg.get("enabled", False) and potential_cfg.get("include_in_combined_report", True):
+        from potential_screener import scan_potential_radar
+
+        potential_scan = scan_potential_radar()
+
+    research_briefs = None
+    research_cfg = load_config().get("research_agent", {})
+    if (
+        research_cfg.get("enabled", True)
+        and research_cfg.get("include_in_combined_report", True)
+        and potential_scan is not None
+    ):
+        from research_agent import build_research_briefs
+
+        potential_picks, _ = potential_scan
+        research_briefs = build_research_briefs(potential_picks, serenity_digest)
+
     merge_reports = len(markets) > 1 and _merge_markets_enabled()
     if merge_reports:
         combined = build_combined_report(
@@ -1755,6 +1821,8 @@ def main() -> int:
             holdings=holdings_scan,
             social=social_report,
             serenity=serenity_digest,
+            potential=potential_scan,
+            research=research_briefs,
         )
         print(combined)
     else:

@@ -104,63 +104,87 @@ def _fetch_twitter_posts(handle: str, start: datetime, end: datetime) -> list[Se
     return posts
 
 
+def _curated_june_11_snapshot() -> SerenityDigest:
+    posts = (
+        SerenityPost(
+            text=(
+                "I expect FOCI (3363) to be a bottleneck for both $NVDA and $TSM optical programs. "
+                "Rotated trimmed $LITE/$COHR profits into CPO names like $SIVE / Foci. "
+                "Sell-side implying selling at ~$2.5B — institutions want the float."
+            ),
+            created_at="2026-06-11",
+        ),
+        SerenityPost(
+            text=(
+                "There we go. My CPO longs in Taiwan are finally starting to take off today. "
+                "Shunsin +10% Foci +10% Xintec +10%. Just waiting on Win Semi, Msscorp, and Nextronics to catch up."
+            ),
+            created_at="2026-06-11",
+        ),
+        SerenityPost(
+            text=(
+                "HOW DOES $POET have a higher valuation than FOCI (3363)? FOCI is literally the bottleneck "
+                "for CPO volume ramp and main supplier for $TSM and $NVDA. High conviction Foci outperforms "
+                "once institutions find this name."
+            ),
+            created_at="2026-06-11",
+        ),
+        SerenityPost(
+            text=(
+                "Random CPO related names I like: $SIVE, Foci (3363), $TSEM, Browave (3163), $AXTI, "
+                "Msscorps (6830), Shunsin (6451), $MTSI, Nextronics (8417), $LITE, $COHR, $SOI. "
+                "Disclosure: I own most, not all."
+            ),
+            created_at="2026-06-11",
+        ),
+    )
+    themes = (
+        "核心新标的：FOCI (3363) 是 NVDA/TSM 光互连 CPO 放量瓶颈，估值仅约 $25亿，显著低于 POET",
+        "仓位动作：5月已将 Lumentum/Coherent 获利了结，轮动至 $SIVE、FOCI 等 CPO 名字",
+        "台湾光模块链启动：信骅 +10%、FOCI +10%、鑫创 +10%，等待 Win Semi、MSS、Nextronics 补涨",
+        "整体框架不变：仍处光学 transceiver 第二阶段，第三阶段 SiPh/ELS/CPO 正在加仓",
+        "机构行为解读：卖方暗示 FOCI 在 $25亿 估值出货 = 机构在抢筹码而非看空",
+    )
+    tickers = ("FOCI", "SIVE", "NVDA", "TSM", "POET", "LITE", "COHR", "AXTI", "MTSI", "SOI")
+    return SerenityDigest(
+        handle=DEFAULT_HANDLE,
+        target_date="2026-06-11",
+        posts=posts,
+        themes=themes,
+        tickers=tickers,
+        sentiment_label="偏看涨",
+        source="公开追踪站 semiconstocks.com / followserenity.com（X API 未配置）",
+        notes=(
+            "来源为第三方公开整理的 @aleabitoreddit 帖文，非官方 API 全量抓取。",
+            "配置 TWITTER_BEARER_TOKEN 后可自动拉取原帖。",
+        ),
+    )
+
+
 def _fallback_snapshot(target_date: str) -> SerenityDigest:
     """Curated public snapshot when X API is unavailable."""
     if target_date == "2026-06-11":
-        posts = (
-            SerenityPost(
-                text=(
-                    "I expect FOCI (3363) to be a bottleneck for both $NVDA and $TSM optical programs. "
-                    "Rotated trimmed $LITE/$COHR profits into CPO names like $SIVE / Foci. "
-                    "Sell-side implying selling at ~$2.5B — institutions want the float."
-                ),
-                created_at="2026-06-11",
-            ),
-            SerenityPost(
-                text=(
-                    "There we go. My CPO longs in Taiwan are finally starting to take off today. "
-                    "Shunsin +10% Foci +10% Xintec +10%. Just waiting on Win Semi, Msscorp, and Nextronics to catch up."
-                ),
-                created_at="2026-06-11",
-            ),
-            SerenityPost(
-                text=(
-                    "HOW DOES $POET have a higher valuation than FOCI (3363)? FOCI is literally the bottleneck "
-                    "for CPO volume ramp and main supplier for $TSM and $NVDA. High conviction Foci outperforms "
-                    "once institutions find this name."
-                ),
-                created_at="2026-06-11",
-            ),
-            SerenityPost(
-                text=(
-                    "Random CPO related names I like: $SIVE, Foci (3363), $TSEM, Browave (3163), $AXTI, "
-                    "Msscorps (6830), Shunsin (6451), $MTSI, Nextronics (8417), $LITE, $COHR, $SOI. "
-                    "Disclosure: I own most, not all."
-                ),
-                created_at="2026-06-11",
-            ),
-        )
-        themes = (
-            "核心新标的：FOCI (3363) 是 NVDA/TSM 光互连 CPO 放量瓶颈，估值仅约 $25亿，显著低于 POET",
-            "仓位动作：5月已将 Lumentum/Coherent 获利了结，轮动至 $SIVE、FOCI 等 CPO 名字",
-            "台湾光模块链启动：信骅 +10%、FOCI +10%、鑫创 +10%，等待 Win Semi、MSS、Nextronics 补涨",
-            "整体框架不变：仍处光学 transceiver 第二阶段，第三阶段 SiPh/ELS/CPO 正在加仓",
-            "机构行为解读：卖方暗示 FOCI 在 $25亿 估值出货 = 机构在抢筹码而非看空",
-        )
-        tickers = ("FOCI", "SIVE", "NVDA", "TSM", "POET", "LITE", "COHR", "AXTI", "MTSI", "SOI")
-        return SerenityDigest(
-            handle=DEFAULT_HANDLE,
-            target_date=target_date,
-            posts=posts,
-            themes=themes,
-            tickers=tickers,
-            sentiment_label="偏看涨",
-            source="公开追踪站 semiconstocks.com / followserenity.com（X API 未配置）",
-            notes=(
-                "来源为第三方公开整理的 @aleabitoreddit 帖文，非官方 API 全量抓取。",
-                "配置 TWITTER_BEARER_TOKEN 后可自动拉取原帖。",
-            ),
-        )
+        return _curated_june_11_snapshot()
+
+    # Reuse latest curated snapshot for nearby dates so research linkage still works.
+    try:
+        target = datetime.strptime(target_date, "%Y-%m-%d").date()
+        anchor = datetime.strptime("2026-06-11", "%Y-%m-%d").date()
+        if 0 < (target - anchor).days <= 7:
+            digest = _curated_june_11_snapshot()
+            return SerenityDigest(
+                handle=digest.handle,
+                target_date=target_date,
+                posts=digest.posts,
+                themes=digest.themes,
+                tickers=digest.tickers,
+                sentiment_label=digest.sentiment_label,
+                source=digest.source,
+                notes=digest.notes + (f"沿用 2026-06-11 公开摘要（{target_date} 暂无独立缓存）。",),
+            )
+    except ValueError:
+        pass
+
     return SerenityDigest(
         handle=DEFAULT_HANDLE,
         target_date=target_date,

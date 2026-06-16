@@ -182,6 +182,49 @@
     "max_position_weight_pct": 25,
     "earnings_alert_days": 14
   },
+  "potential_radar": {
+    "enabled": true,
+    "include_in_combined_report": true,
+    "top_n": 5,
+    "max_per_market": 2,
+    "min_score": 58,
+    "markets": {
+      "US": true,
+      "CN": true,
+      "AU": true
+    },
+    "universes": {
+      "US": [
+        "MRVL", "LRCX", "KLAC", "AMAT", "ON", "MPWR", "CRDO", "WDC", "STX",
+        "COHR", "LITE", "ASTS", "RKLB", "TSM", "ASML", "DELL", "VRT",
+        "AAOI", "SNDK", "SMCI", "ARM", "PLTR"
+      ],
+      "CN": [
+        "688981.SS", "002371.SZ", "603501.SS", "688012.SS", "300474.SZ",
+        "688256.SS", "002049.SZ"
+      ],
+      "AU": [
+        "XRO.AX", "CPU.AX", "LYC.AX", "PLS.AX", "BRN.AX"
+      ]
+    },
+    "scoring": {
+      "week_52_position_low": 22,
+      "week_52_position_high": 68,
+      "week_52_position_late": 88,
+      "min_volume_ratio": 1.1,
+      "min_momentum_20d": 3.0,
+      "max_momentum_20d": 35.0,
+      "rsi_overbought": 72
+    },
+    "disclaimer": "潜力雷达捕捉早期技术特征，需结合财报、产业链与 Serenity 式瓶颈研究验证。"
+  },
+  "research_agent": {
+    "enabled": true,
+    "include_in_combined_report": true,
+    "max_briefs": 3,
+    "min_potential_score": 58,
+    "disclaimer": "研究 Agent 为规则化产业链映射 + Serenity 摘要联动，非 LLM 深度调研；重大决策前请核对财报与公告。"
+  },
   "social_sentiment": {
     "enabled": true,
     "include_in_combined_report": true,

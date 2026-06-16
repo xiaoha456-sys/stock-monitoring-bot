@@ -1,6 +1,6 @@
 # Stock Monitoring Bot
 
-分市场（美股 / A股 / 澳股）每日投资简报机器人。从可配置观察池中自动评分、给出买入区间与目标/止损价，通过**邮件**（或可选微信）分市场推送，并支持 T+1 / T+5 / T+20 复盘打分。
+分市场（美股 / A股 / 澳股）每日投资简报机器人。从可配置观察池中自动评分、给出买入区间与目标/止损价，通过**邮件**（或可选微信）分市场推送，并支持周度 T+5 复盘打分。
 
 ## 功能
 
@@ -79,7 +79,7 @@ python stock_bot.py --channel email
 
 - `markets.US/CN/AU.watchlist` — 各市场候选股票
 - `markets.*.top_n` — 每日首选数量
-- `review_horizons_days` — 复盘周期（默认 1 / 5 / 20 天）
+- `review_horizons_days` / `review.horizons_days` — 复盘周期（默认 T+5，每周一执行）
 
 A股默认启用 **alphasift** 全市场选股（`volume_breakout` 放量突破策略），静态 `watchlist` 仅在 alphasift 失败时兜底。金融股行业分散：同一行业最多 1 只。
 澳股代码示例：`CBA.AX`、`BHP.AX`
@@ -169,10 +169,10 @@ python -m unittest discover -s tests
 
 ## 6. 定时任务
 
-`.github/workflows/daily-stock-report.yml` 每天悉尼时间 10:00：
+`.github/workflows/daily-stock-report.yml` **北京时间周一至周五 09:00** 自动推送（周六日不发）：
 
 1. 运行测试
-2. 复盘历史推荐（T+1 / T+5 / T+20）
+2. **每周一**额外执行复盘（T+5）与准确率自迭代
 3. 分市场生成并邮件推送今日简报
 4. 将推荐存档到 `data/predictions/`
 

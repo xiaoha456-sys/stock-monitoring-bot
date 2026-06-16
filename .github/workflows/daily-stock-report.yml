@@ -2,8 +2,9 @@ name: Daily stock report
 
 on:
   schedule:
-    - cron: "0 10 * * *"
-      timezone: "Australia/Sydney"
+    # 北京时间周一至周五 09:00（不含周六日）
+    - cron: "0 9 * * 1-5"
+      timezone: "Asia/Shanghai"
   workflow_dispatch:
 
 permissions:
@@ -34,7 +35,22 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests
 
-      - name: Review past predictions
+      - name: Check weekly review day (Monday)
+        id: weekly
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_review=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          DOW=$(TZ=Asia/Shanghai date +%u)
+          if [ "$DOW" = "1" ]; then
+            echo "run_review=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_review=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Review past predictions (weekly T+5)
+        if: steps.weekly.outputs.run_review == 'true'
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -45,7 +61,8 @@ jobs:
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
         run: python stock_bot.py --review
 
-      - name: Iterate accuracy tuning
+      - name: Iterate accuracy tuning (weekly)
+        if: steps.weekly.outputs.run_review == 'true'
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

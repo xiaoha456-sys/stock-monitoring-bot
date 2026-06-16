@@ -1233,7 +1233,9 @@ def review_predictions(
     now: datetime | None = None,
 ) -> tuple[str, dict[str, Any]]:
     config = load_config()
-    horizons = horizons or list(config.get("review_horizons_days", [1, 5, 20]))
+    review_cfg = config.get("review", {})
+    default_horizons = review_cfg.get("horizons_days") or config.get("review_horizons_days", [5])
+    horizons = horizons or list(default_horizons)
     report_time = (now or datetime.now(SYDNEY)).astimezone(SYDNEY)
     review_payload: dict[str, Any] = {
         "reviewed_at": report_time.isoformat(),
@@ -1243,6 +1245,8 @@ def review_predictions(
     lines = [
         "# 📊 推荐复盘打分",
         f"**{report_time:%Y-%m-%d %H:%M}** 悉尼时间",
+        "",
+        "> 周度复盘，默认评估 T+5（约一周前推送）表现。",
         "",
     ]
 

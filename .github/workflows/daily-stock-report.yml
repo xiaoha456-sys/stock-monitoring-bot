@@ -2,9 +2,9 @@ name: Daily stock report
 
 on:
   schedule:
-    # 北京时间周一至周五 09:00（不含周六日）
+    # 悉尼时间周一至周五 09:00（不含周六日）
     - cron: "0 9 * * 1-5"
-      timezone: "Asia/Shanghai"
+      timezone: "Australia/Sydney"
   workflow_dispatch:
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
             echo "run_review=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          DOW=$(TZ=Asia/Shanghai date +%u)
+          DOW=$(TZ=Australia/Sydney date +%u)
           if [ "$DOW" = "1" ]; then
             echo "run_review=true" >> "$GITHUB_OUTPUT"
           else

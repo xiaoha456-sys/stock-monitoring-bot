@@ -4,7 +4,7 @@
   "review": {
     "schedule": "weekly",
     "weekday": "monday",
-    "timezone": "Asia/Shanghai",
+    "timezone": "Australia/Sydney",
     "horizons_days": [5]
   },
   "market_indices": {

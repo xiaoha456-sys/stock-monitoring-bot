@@ -169,7 +169,7 @@ python -m unittest discover -s tests
 
 ## 6. 定时任务
 
-`.github/workflows/daily-stock-report.yml` **北京时间周一至周五 09:00** 自动推送（周六日不发）：
+`.github/workflows/daily-stock-report.yml` **悉尼时间周一至周五 09:00** 自动推送（周六日不发）：
 
 1. 运行测试
 2. **每周一**额外执行复盘（T+5）与准确率自迭代

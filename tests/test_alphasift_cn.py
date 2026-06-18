@@ -155,22 +155,22 @@ class AlphasiftCnTests(unittest.TestCase):
             [
                 AlphasiftCandidate(
                     rank=1,
-                    code="688981",
-                    name="中芯国际",
+                    code="600519",
+                    name="贵州茅台",
                     final_score=90.0,
                     screen_score=88.0,
                     ranking_reason="放量",
-                    industry="半导体",
+                    industry="白酒",
                     change_pct=1.0,
-                    yahoo_ticker="688981.SS",
+                    yahoo_ticker="600519.SS",
                 )
             ],
             {"strategy": "balanced_alpha", "snapshot_count": 100, "after_filter_count": 10, "pick_count": 1},
         )
-        fetch_snapshot_mock.return_value = _sample_snapshot()
+        fetch_snapshot_mock.return_value = _sample_snapshot(ticker="600519.SS")
         picks, others, errors, extras = scan_cn_market()
         self.assertEqual(len(picks), 1)
-        self.assertEqual(picks[0].name, "中芯国际")
+        self.assertEqual(picks[0].name, "贵州茅台")
         self.assertIn("alphasift", extras)
         self.assertEqual(errors, {})
 

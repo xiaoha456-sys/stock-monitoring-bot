@@ -87,6 +87,55 @@ class PortfolioManagerTests(unittest.TestCase):
         analysis = analyze_portfolio([_rec("NVDA")], {"NVDA": {}})
         self.assertEqual(len(analysis.earnings_events), 1)
 
+    @patch("portfolio_manager.get_market_cash_config", return_value={"CN": {"mode": "rotate_only"}})
+    @patch("portfolio_manager.market_cash_mode", return_value="rotate_only")
+    def test_rotate_only_changes_allow_add_to_rotation(self, _mode, _cash):
+        config = {
+            "600406.SS": {
+                "shares": 1000,
+                "cost_basis": 20,
+                "max_weight_pct": 100,
+            }
+        }
+        snap = StockSnapshot(
+            ticker="600406.SS",
+            price=23.0,
+            currency="CNY",
+            change_pct=1.0,
+            week_52_low=18.0,
+            week_52_high=26.0,
+            week_52_position=50.0,
+            rsi_14=50.0,
+            sma_50=22.0,
+            sma_200=20.0,
+            atr_14=0.8,
+            headlines=(),
+        )
+        rec = Recommendation(
+            ticker="600406.SS",
+            action="买入",
+            score=75.0,
+            stars=4,
+            buy_low=22.0,
+            buy_high=23.0,
+            target_price=25.0,
+            stop_loss=20.0,
+            reasons=("test",),
+            snapshot=snap,
+            name="国电南瑞",
+        )
+        analysis = analyze_portfolio([rec], config)
+        self.assertEqual(analysis.holdings[0].portfolio_action, "置换加仓")
+        self.assertIn("减仓", analysis.holdings[0].action_reasons[-1])
+
+    def test_format_cash_constraints_section(self):
+        from portfolio_manager import format_cash_constraints_section
+
+        text = "\n".join(format_cash_constraints_section())
+        self.assertIn("资金约束", text)
+        self.assertIn("美股", text)
+        self.assertIn("仅减仓置换", text)
+
 
 if __name__ == "__main__":
     unittest.main()

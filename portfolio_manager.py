@@ -19,6 +19,53 @@ SYSTEM_PORTFOLIO_ACTION = {
 
 MARKET_LABELS = {"US": "美股", "CN": "A股", "AU": "澳股"}
 
+CASH_MODE_LABELS = {
+    "deploy": "可加仓/新开仓",
+    "rotate_only": "仅减仓置换",
+}
+
+
+def get_market_cash_config() -> dict[str, dict[str, Any]]:
+    return dict(_portfolio_settings().get("cash", {}))
+
+
+def market_cash_mode(market_key: str) -> str:
+    entry = get_market_cash_config().get(market_key, {})
+    return str(entry.get("mode", "deploy"))
+
+
+def _cash_currency_symbol(currency: str) -> str:
+    return {"USD": "$", "AUD": "A$", "CNY": "¥"}.get(currency.upper(), currency)
+
+
+def format_market_cash_amount(market_key: str) -> str:
+    entry = get_market_cash_config().get(market_key, {})
+    amount = float(entry.get("available", 0) or 0)
+    currency = str(entry.get("currency", "USD")).upper()
+    symbol = _cash_currency_symbol(currency)
+    if amount <= 0:
+        return f"{symbol}0"
+
+    text = f"{symbol}{amount:,.0f}"
+    if market_key == "US" and currency == "AUD":
+        fx = float(_portfolio_settings().get("fx", {}).get("AUD_USD", 0) or 0)
+        if fx > 0:
+            text += f"（约 US${amount * fx:,.0f}）"
+    return text
+
+
+def apply_cash_constraint(
+    portfolio_action: str,
+    market_key: str,
+    reasons: tuple[str, ...],
+) -> tuple[str, tuple[str, ...]]:
+    if market_cash_mode(market_key) != "rotate_only" or portfolio_action != "允许加仓":
+        return portfolio_action, reasons
+    extra = "无闲置资金，需先减仓释放资金后再买入"
+    if extra in reasons:
+        return "置换加仓", reasons
+    return "置换加仓", reasons + (extra,)
+
 
 @dataclass(frozen=True)
 class EnrichedHolding:
@@ -43,6 +90,8 @@ class PortfolioAnalysis:
     market_weights: dict[str, float]
     alerts: tuple[str, ...]
     earnings_events: tuple[str, ...]
+    correlation_alerts: tuple[str, ...]
+    event_alerts: tuple[str, ...]
 
 
 def _portfolio_settings() -> dict[str, Any]:
@@ -107,6 +156,80 @@ def _resolve_portfolio_action(
         reasons.append("暂无明确调仓信号")
 
     return action, tuple(reasons)
+
+
+def _fetch_return_series(ticker: str, window: int = 21) -> list[float] | None:
+    try:
+        import yfinance as yf
+
+        history = yf.Ticker(ticker).history(period="2mo", auto_adjust=True)
+        if history is None or history.empty or len(history) < window + 1:
+            return None
+        close = history["Close"].astype(float)
+        returns = close.pct_change().dropna().tail(window)
+        return [float(value) for value in returns]
+    except Exception:
+        return None
+
+
+def _correlation_alerts(
+    holdings: list[EnrichedHolding],
+    threshold: float,
+) -> list[str]:
+    series: dict[str, list[float]] = {}
+    labels: dict[str, str] = {}
+    for item in holdings:
+        if item.shares is None or item.market_value is None:
+            continue
+        ticker = item.recommendation.ticker
+        returns = _fetch_return_series(ticker)
+        if returns:
+            series[ticker] = returns
+            labels[ticker] = _display_ticker(item.recommendation)
+
+    tickers = list(series.keys())
+    alerts: list[str] = []
+    for index, left in enumerate(tickers):
+        for right in tickers[index + 1 :]:
+            left_returns = series[left]
+            right_returns = series[right]
+            length = min(len(left_returns), len(right_returns))
+            if length < 10:
+                continue
+            left_slice = left_returns[-length:]
+            right_slice = right_returns[-length:]
+            mean_left = sum(left_slice) / length
+            mean_right = sum(right_slice) / length
+            cov = sum(
+                (a - mean_left) * (b - mean_right) for a, b in zip(left_slice, right_slice)
+            ) / length
+            var_left = sum((a - mean_left) ** 2 for a in left_slice) / length
+            var_right = sum((b - mean_right) ** 2 for b in right_slice) / length
+            if var_left <= 0 or var_right <= 0:
+                continue
+            corr = cov / (var_left**0.5 * var_right**0.5)
+            if corr >= threshold:
+                alerts.append(
+                    f"{labels[left]} 与 {labels[right]} 20日收益相关性 {corr:.2f}，"
+                    "板块/主题重叠风险偏高"
+                )
+    return alerts
+
+
+def _event_alerts(holdings: list[EnrichedHolding]) -> list[str]:
+    alerts: list[str] = []
+    move_threshold = float(_portfolio_settings().get("event_move_pct", 5.0))
+    for item in holdings:
+        snap = item.recommendation.snapshot
+        if abs(snap.change_pct) >= move_threshold:
+            direction = "大涨" if snap.change_pct > 0 else "大跌"
+            alerts.append(
+                f"{_display_ticker(item.recommendation)} 今日{direction} "
+                f"{snap.change_pct:+.1f}%，注意仓位与止损"
+            )
+        if item.thesis:
+            continue
+    return alerts
 
 
 def _fetch_upcoming_earnings(ticker: str, within_days: int = 14) -> str | None:
@@ -191,6 +314,8 @@ def analyze_portfolio(
                 max_weight_pct=parsed.get("max_weight_pct"),
                 global_max_weight=global_max_weight,
             )
+            market_key = _holding_market(item.recommendation.ticker)
+            action, reasons = apply_cash_constraint(action, market_key, reasons)
             updated.append(
                 EnrichedHolding(
                     recommendation=item.recommendation,
@@ -221,6 +346,8 @@ def analyze_portfolio(
                 max_weight_pct=parsed.get("max_weight_pct"),
                 global_max_weight=global_max_weight,
             )
+            market_key = _holding_market(item.recommendation.ticker)
+            action, reasons = apply_cash_constraint(action, market_key, reasons)
             updated.append(
                 EnrichedHolding(
                     recommendation=item.recommendation,
@@ -262,6 +389,10 @@ def analyze_portfolio(
         if event:
             earnings_events.append(event)
 
+    corr_threshold = float(settings.get("correlation_threshold", 0.75))
+    correlation_alerts = _correlation_alerts(list(enriched), corr_threshold)
+    event_alerts = _event_alerts(list(enriched))
+
     return PortfolioAnalysis(
         holdings=tuple(enriched),
         market_values=market_values,
@@ -271,6 +402,8 @@ def analyze_portfolio(
         },
         alerts=tuple(alerts),
         earnings_events=tuple(earnings_events),
+        correlation_alerts=tuple(correlation_alerts),
+        event_alerts=tuple(event_alerts),
     )
 
 
@@ -286,8 +419,8 @@ def format_portfolio_overview_section(analysis: PortfolioAnalysis) -> list[str]:
     if valued:
         lines.extend(
             [
-                "| 标的 | 仓位 | 浮盈亏 | 自设目标 | 自设止损 |",
-                "| --- | --- | --- | --- | --- |",
+                "| 标的 | 仓位 | 浮盈亏 | 投资理由 | 自设目标 | 自设止损 |",
+                "| --- | --- | --- | --- | --- | --- |",
             ]
         )
         for item in valued:
@@ -302,12 +435,13 @@ def format_portfolio_overview_section(analysis: PortfolioAnalysis) -> list[str]:
                 )
             else:
                 pnl = "未录入成本"
+            thesis = item.thesis[:24] + "…" if len(item.thesis) > 24 else (item.thesis or "—")
             user_target = (
                 _money(item.user_target, snap.currency) if item.user_target is not None else "—"
             )
             user_stop = _money(item.user_stop, snap.currency) if item.user_stop is not None else "—"
             lines.append(
-                f"| {_display_ticker(rec)} | {weight} | {pnl} | {user_target} | {user_stop} |"
+                f"| {_display_ticker(rec)} | {weight} | {pnl} | {thesis} | {user_target} | {user_stop} |"
             )
         lines.append("")
 
@@ -327,6 +461,20 @@ def format_portfolio_overview_section(analysis: PortfolioAnalysis) -> list[str]:
             lines.append(f"- {alert}")
         lines.append("")
 
+    if analysis.correlation_alerts:
+        lines.append("**相关性提示**")
+        lines.append("")
+        for alert in analysis.correlation_alerts:
+            lines.append(f"- {alert}")
+        lines.append("")
+
+    if analysis.event_alerts:
+        lines.append("**异常波动**")
+        lines.append("")
+        for alert in analysis.event_alerts:
+            lines.append(f"- {alert}")
+        lines.append("")
+
     if analysis.earnings_events:
         lines.append("**近期财报**")
         lines.append("")
@@ -334,4 +482,32 @@ def format_portfolio_overview_section(analysis: PortfolioAnalysis) -> list[str]:
             lines.append(f"- {event}")
         lines.append("")
 
+    return lines
+
+
+def format_cash_constraints_section() -> list[str]:
+    cash_cfg = get_market_cash_config()
+    if not cash_cfg:
+        return []
+
+    lines = [
+        "## 💵 资金约束",
+        "",
+        "> 各市场可用资金与操作模式；A股/澳股无现金时仅能减仓置换。",
+        "",
+        "| 市场 | 可用资金 | 模式 | 说明 |",
+        "| --- | --- | --- | --- |",
+    ]
+    for market_key in MARKET_ORDER:
+        entry = cash_cfg.get(market_key)
+        if not entry:
+            continue
+        mode = market_cash_mode(market_key)
+        note = str(entry.get("note", "") or "—")
+        lines.append(
+            f"| {MARKET_LABELS.get(market_key, market_key)} | "
+            f"{format_market_cash_amount(market_key)} | "
+            f"{CASH_MODE_LABELS.get(mode, mode)} | {note} |"
+        )
+    lines.append("")
     return lines

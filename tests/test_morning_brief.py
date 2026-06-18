@@ -63,9 +63,12 @@ class MorningBriefTests(unittest.TestCase):
         conclusion_pos = report.index("## 📌 今日结论")
         appendix_pos = report.index("## 附录：技术详情")
         portfolio_pos = report.index("## 📊 持仓管家")
-        self.assertLess(conclusion_pos, portfolio_pos)
+        cash_pos = report.index("## 💵 资金约束")
+        self.assertLess(conclusion_pos, cash_pos)
+        self.assertLess(cash_pos, portfolio_pos)
         self.assertLess(portfolio_pos, appendix_pos)
         self.assertIn("## 💰 候选价格参考", report)
+        self.assertIn("仅减仓置换", report)
 
     def test_holdings_show_only_actionable_in_events(self):
         add_rec = build_recommendation(_sample_snapshot(ticker="MU"))

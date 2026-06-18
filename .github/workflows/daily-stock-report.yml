@@ -35,7 +35,7 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests
 
-      - name: Check weekly review day (Monday)
+      - name: Check weekly review day (Saturday)
         id: weekly
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -43,7 +43,7 @@ jobs:
             exit 0
           fi
           DOW=$(TZ=Australia/Sydney date +%u)
-          if [ "$DOW" = "1" ]; then
+          if [ "$DOW" = "6" ]; then
             echo "run_review=true" >> "$GITHUB_OUTPUT"
           else
             echo "run_review=false" >> "$GITHUB_OUTPUT"

@@ -333,8 +333,26 @@ def run_alphasift_evaluation(config: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         return {"status": "error", "reason": str(exc)}
 
+    run_items: list[Any]
+    if isinstance(results, dict):
+        run_items = list(results.get("runs", []) or [])
+    elif isinstance(results, list):
+        run_items = results
+    else:
+        run_items = []
+
     summaries = []
-    for item in results[:5]:
+    for item in run_items[:5]:
+        if isinstance(item, dict):
+            summaries.append(
+                {
+                    "run_id": item.get("run_id", ""),
+                    "strategy": item.get("strategy", ""),
+                    "win_rate": item.get("win_rate"),
+                    "average_return_pct": item.get("average_return_pct"),
+                }
+            )
+            continue
         summaries.append(
             {
                 "run_id": getattr(item, "run_id", ""),

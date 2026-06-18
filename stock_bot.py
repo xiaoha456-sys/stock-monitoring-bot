@@ -741,12 +741,16 @@ def scan_cn_market(
         is_alphasift_available,
         run_alphasift_screen,
     )
+    from cn_tradable import filter_tradable_cn_tickers, is_cn_restricted_board, tradable_filter_note
 
     config = load_config()["markets"]["CN"]
     alphasift_config = _cn_alphasift_config()
     top_n = int(config.get("top_n", 3))
     fallback_watchlist = list(config.get("watchlist", []))
     extras: dict[str, Any] = {}
+    tradable_note = tradable_filter_note()
+    if tradable_note:
+        extras["tradable"] = tradable_note
     if regime:
         extras["regime"] = regime_to_dict(regime)
     errors: dict[str, str] = {}
@@ -776,16 +780,18 @@ def scan_cn_market(
     tickers: list[str] = []
     candidate_by_ticker: dict[str, Any] = {}
     for candidate in candidates:
+        if is_cn_restricted_board(candidate.yahoo_ticker):
+            continue
         if candidate.yahoo_ticker in candidate_by_ticker:
             continue
         tickers.append(candidate.yahoo_ticker)
         candidate_by_ticker[candidate.yahoo_ticker] = candidate
 
     if not tickers and alphasift_config.get("fallback_to_watchlist", True):
-        tickers = list(fallback_watchlist)
+        tickers = filter_tradable_cn_tickers(list(fallback_watchlist))
         print("Warning: using static CN watchlist fallback.", file=sys.stderr)
     elif alphasift_config.get("merge_fallback_watchlist", False):
-        for ticker in fallback_watchlist:
+        for ticker in filter_tradable_cn_tickers(fallback_watchlist):
             if ticker not in tickers:
                 tickers.append(ticker)
 
@@ -811,6 +817,9 @@ def scan_cn_market(
         recommendations,
         strategy=_market_quant_strategy("CN"),
     )
+    recommendations = [
+        rec for rec in recommendations if not is_cn_restricted_board(rec.ticker)
+    ]
     ranked = sorted(
         recommendations,
         key=lambda item: (item.alphasift_rank or 999, -item.score),
@@ -992,6 +1001,8 @@ def build_combined_report(
     serenity: Any | None = None,
     potential: tuple[list[Any], dict[str, str]] | None = None,
     research: list[Any] | None = None,
+    radar: tuple[list[Any], dict[str, str]] | None = None,
+    cn_funds: tuple[list[Recommendation], dict[str, str]] | None = None,
 ) -> str:
     from morning_brief import compose_morning_brief
 
@@ -1004,6 +1015,8 @@ def build_combined_report(
         serenity=serenity,
         potential=potential,
         research=research,
+        radar=radar,
+        cn_funds=cn_funds,
     )
 
 
@@ -1019,7 +1032,11 @@ def scan_market(
 
     config = load_config()
     market = config["markets"][market_key]
-    watchlist = market["watchlist"]
+    watchlist = list(market["watchlist"])
+    if market_key == "CN":
+        from cn_tradable import filter_tradable_cn_tickers
+
+        watchlist = filter_tradable_cn_tickers(watchlist)
     top_n = int(market.get("top_n", 3))
     strategy = _market_quant_strategy(market_key)
     extras: dict[str, Any] = {
@@ -1249,6 +1266,59 @@ def review_predictions(
         "> 周度复盘，默认评估 T+5（约一周前推送）表现。",
         "",
     ]
+
+    review_weekday = str(review_cfg.get("weekday", "monday")).lower()
+    if review_weekday == "saturday" and report_time.weekday() == 5:
+        week_start = (report_time - timedelta(days=5)).date()
+        week_dates = [
+            (week_start + timedelta(days=offset)).strftime("%Y-%m-%d")
+            for offset in range(5)
+        ]
+        lines.extend(["## 本周汇总（周一至周五）", ""])
+        lines.append(f"_统计区间：{week_dates[0]} ~ {week_dates[-1]} 的推送记录_")
+        lines.append("")
+        weekly_payload: dict[str, Any] = {"dates": week_dates, "markets": {}, "holdings": {}}
+        for market_key in MARKET_ORDER:
+            market_label = config["markets"][market_key]["label"]
+            weekly_picks: list[dict[str, Any]] = []
+            weekly_holdings: list[dict[str, Any]] = []
+            for signal_date in week_dates:
+                path = PREDICTIONS_DIR / f"{signal_date}.json"
+                if not path.exists():
+                    continue
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                market_block = payload.get("markets", {}).get(market_key) or {}
+                weekly_picks.extend(market_block.get("picks", []) or [])
+                weekly_holdings.extend((payload.get("holdings") or {}).get(market_key, []) or [])
+
+            if weekly_picks:
+                graded = _grade_records(
+                    weekly_picks,
+                    datetime.strptime(week_dates[0], "%Y-%m-%d").replace(tzinfo=SYDNEY),
+                    report_time,
+                )
+                if graded:
+                    summary = _summarize_graded(graded)
+                    weekly_payload["markets"][market_key] = summary
+                    lines.append(
+                        f"- {market_label}观察池：样本 {summary['count']}，"
+                        f"平均分 {summary['average_score']:.1f}，命中率 {summary['hit_rate'] * 100:.0f}%"
+                    )
+            if weekly_holdings:
+                graded_holdings = _grade_records(
+                    weekly_holdings,
+                    datetime.strptime(week_dates[0], "%Y-%m-%d").replace(tzinfo=SYDNEY),
+                    report_time,
+                )
+                if graded_holdings:
+                    summary = _summarize_graded(graded_holdings)
+                    weekly_payload["holdings"][market_key] = summary
+                    lines.append(
+                        f"- {market_label}持仓：样本 {summary['count']}，"
+                        f"平均分 {summary['average_score']:.1f}，命中率 {summary['hit_rate'] * 100:.0f}%"
+                    )
+        lines.append("")
+        review_payload["weekly_monday_friday"] = weekly_payload
 
     for horizon in horizons:
         signal_date = (report_time - timedelta(days=horizon)).strftime("%Y-%m-%d")
@@ -1817,6 +1887,22 @@ def main() -> int:
         potential_picks, _ = potential_scan
         research_briefs = build_research_briefs(potential_picks, serenity_digest)
 
+    radar_scan = None
+    radar_cfg = load_config().get("market_radar", {})
+    if radar_cfg.get("enabled", False) and radar_cfg.get("include_in_combined_report", True):
+        from radar import save_radar_snapshot, scan_market_radar
+
+        radar_scan = scan_market_radar(regimes)
+        radar_picks, radar_errors = radar_scan
+        save_radar_snapshot(radar_picks, errors=radar_errors)
+
+    cn_funds_scan = None
+    cn_funds_cfg = load_config().get("markets", {}).get("CN", {}).get("funds", {})
+    if cn_funds_cfg.get("enabled", True) and cn_funds_cfg.get("include_in_combined_report", True):
+        from cn_funds import scan_cn_funds
+
+        cn_funds_scan = scan_cn_funds(regimes.get("CN") if regimes else None)
+
     merge_reports = len(markets) > 1 and _merge_markets_enabled()
     if merge_reports:
         combined = build_combined_report(
@@ -1827,6 +1913,8 @@ def main() -> int:
             serenity=serenity_digest,
             potential=potential_scan,
             research=research_briefs,
+            radar=radar_scan,
+            cn_funds=cn_funds_scan,
         )
         print(combined)
     else:

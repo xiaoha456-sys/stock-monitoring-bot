@@ -79,7 +79,7 @@ python stock_bot.py --channel email
 
 - `markets.US/CN/AU.watchlist` — 各市场候选股票
 - `markets.*.top_n` — 每日首选数量
-- `review_horizons_days` / `review.horizons_days` — 复盘周期（默认 T+5，每周一执行）
+- `review_horizons_days` / `review.horizons_days` — 复盘周期（默认 T+5，每周六执行，复盘本周一至周五）
 
 A股默认启用 **alphasift** 全市场选股（`volume_breakout` 放量突破策略），静态 `watchlist` 仅在 alphasift 失败时兜底。金融股行业分散：同一行业最多 1 只。
 澳股代码示例：`CBA.AX`、`BHP.AX`

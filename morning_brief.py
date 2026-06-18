@@ -11,9 +11,14 @@ from portfolio_manager import (
     EnrichedHolding,
     PortfolioAnalysis,
     analyze_portfolio,
+    format_cash_constraints_section,
     format_portfolio_overview_section,
+    get_market_cash_config,
+    market_cash_mode,
 )
 from tuning import get_thresholds
+from holding_orders import format_holding_orders_section, format_order_legs, suggest_holding_order
+from cn_tradable import is_cn_restricted_board
 
 from stock_bot import (
     MARKET_ORDER,
@@ -36,33 +41,100 @@ def _is_quality_pick(rec: Recommendation) -> bool:
     return rec.action in ("买入", "逢低关注") and rec.score >= thresholds["watch"]
 
 
+def _holding_market_key(item: EnrichedHolding) -> str:
+    return _holding_market(item.recommendation.ticker)
+
+
+def _quality_picks_for_market(
+    market_reports: dict[str, tuple[list[Recommendation], list[Recommendation], dict[str, str], dict[str, Any]]],
+    market_key: str,
+    *,
+    exclude_tickers: set[str] | None = None,
+) -> list[Recommendation]:
+    block = market_reports.get(market_key)
+    if not block:
+        return []
+    picks, _, _, _ = block
+    excluded = exclude_tickers or set()
+    return [
+        rec
+        for rec in picks
+        if _is_quality_pick(rec)
+        and rec.ticker not in excluded
+        and not (market_key == "CN" and is_cn_restricted_board(rec.ticker))
+    ]
+
+
 def derive_verdict(
     analysis: PortfolioAnalysis,
     market_reports: dict[str, tuple[list[Recommendation], list[Recommendation], dict[str, str], dict[str, Any]]],
 ) -> dict[str, Any]:
     add_holdings = [item for item in analysis.holdings if item.portfolio_action == "允许加仓"]
+    rotate_holdings = [item for item in analysis.holdings if item.portfolio_action == "置换加仓"]
     reduce_holdings = [item for item in analysis.holdings if item.portfolio_action == "降低风险"]
     observe_holdings = [item for item in analysis.holdings if item.portfolio_action == "继续观察"]
 
+    holding_tickers = {item.recommendation.ticker for item in analysis.holdings}
     quality_picks: list[Recommendation] = []
+    rotation_picks: list[Recommendation] = []
+    deploy_picks: list[Recommendation] = []
     for market_key in MARKET_ORDER:
-        block = market_reports.get(market_key)
-        if not block:
-            continue
-        picks, _, _, _ = block
+        picks = _quality_picks_for_market(
+            market_reports,
+            market_key,
+            exclude_tickers=holding_tickers,
+        )
         for rec in picks:
-            if _is_quality_pick(rec):
-                quality_picks.append(rec)
+            quality_picks.append(rec)
+            if market_cash_mode(market_key) == "rotate_only":
+                rotation_picks.append(rec)
+            else:
+                deploy_picks.append(rec)
     quality_picks.sort(key=lambda item: item.score, reverse=True)
     quality_picks = quality_picks[:_MAX_RESEARCH_CANDIDATES]
+    rotation_picks.sort(key=lambda item: item.score, reverse=True)
+    deploy_picks.sort(key=lambda item: item.score, reverse=True)
 
-    no_action = not add_holdings and not reduce_holdings and not quality_picks
+    rotation_plans: list[dict[str, Any]] = []
+    for market_key in MARKET_ORDER:
+        if market_cash_mode(market_key) != "rotate_only":
+            continue
+        sellers = [
+            item
+            for item in reduce_holdings
+            if _holding_market_key(item) == market_key
+        ]
+        buyers = [
+            rec
+            for rec in rotation_picks
+            if _holding_market(rec.ticker) == market_key
+        ][:2]
+        if sellers and buyers:
+            rotation_plans.append(
+                {
+                    "market_key": market_key,
+                    "sellers": sellers[:3],
+                    "buyers": buyers,
+                    "analysis": analysis,
+                }
+            )
+
+    no_action = (
+        not add_holdings
+        and not rotate_holdings
+        and not reduce_holdings
+        and not quality_picks
+    )
     return {
         "no_action_today": no_action,
         "add_holdings": add_holdings,
+        "rotate_holdings": rotate_holdings,
         "reduce_holdings": reduce_holdings,
         "observe_holdings": observe_holdings,
         "quality_picks": quality_picks,
+        "rotation_picks": rotation_picks,
+        "deploy_picks": deploy_picks,
+        "rotation_plans": rotation_plans,
         "analysis": analysis,
     }
 
@@ -79,14 +151,21 @@ def format_conclusion_section(verdict: dict[str, Any]) -> list[str]:
         names = "、".join(
             _display_ticker(item.recommendation) for item in verdict["add_holdings"][:3]
         )
-        parts.append(f"持仓允许加仓 {len(verdict['add_holdings'])} 只（{names}）")
+        parts.append(f"美股可加仓 {len(verdict['add_holdings'])} 只（{names}）")
+    if verdict["rotate_holdings"]:
+        names = "、".join(
+            _display_ticker(item.recommendation) for item in verdict["rotate_holdings"][:3]
+        )
+        parts.append(f"置换加仓 {len(verdict['rotate_holdings'])} 只（{names}，需先减仓）")
     if verdict["reduce_holdings"]:
         names = "、".join(
             _display_ticker(item.recommendation) for item in verdict["reduce_holdings"][:3]
         )
         parts.append(f"持仓降低风险 {len(verdict['reduce_holdings'])} 只（{names}）")
-    if verdict["quality_picks"]:
-        parts.append(f"观察池 {len(verdict['quality_picks'])} 个候选值得进一步研究")
+    if verdict["deploy_picks"]:
+        parts.append(f"美股观察池 {len(verdict['deploy_picks'])} 个候选可新开仓")
+    if verdict["rotation_picks"]:
+        parts.append(f"A股/澳股 {len(verdict['rotation_picks'])} 个置换候选（减仓后买入）")
 
     lines.append(f"> **{'；'.join(parts)}**")
     lines.append("")
@@ -101,7 +180,11 @@ def format_brief_holdings_section(
     if not analysis.holdings:
         return []
 
-    actionable = verdict["add_holdings"] + verdict["reduce_holdings"]
+    actionable = (
+        verdict["add_holdings"]
+        + verdict["rotate_holdings"]
+        + verdict["reduce_holdings"]
+    )
     observe = verdict["observe_holdings"]
 
     lines = [
@@ -144,8 +227,15 @@ def format_brief_holdings_section(
     return lines
 
 
-def format_research_candidates_section(candidates: list[Recommendation]) -> list[str]:
-    if not candidates:
+def format_research_candidates_section(
+    candidates: list[Recommendation],
+    *,
+    deploy_picks: list[Recommendation] | None = None,
+    rotation_picks: list[Recommendation] | None = None,
+) -> list[str]:
+    deploy_picks = deploy_picks or []
+    rotation_picks = rotation_picks or []
+    if not candidates and not deploy_picks and not rotation_picks:
         return [
             "## 🔍 值得研究",
             "",
@@ -156,18 +246,78 @@ def format_research_candidates_section(candidates: list[Recommendation]) -> list
     lines = [
         "## 🔍 值得研究",
         "",
-        f"> 从三市场观察池筛选的 Top {len(candidates)}，供进一步研究，非买入建议。",
+        "> 从三市场观察池筛选的候选；美股可用现金直接买入，A股/澳股需减仓置换。"
+        " A股已排除科创板/创业板个股，亦可参考下方长期基金。",
         "",
     ]
-    for index, rec in enumerate(candidates, start=1):
-        snap = rec.snapshot
-        sign = "+" if snap.change_pct >= 0 else ""
-        strategy = f" · {rec.strategy}" if rec.strategy else ""
-        lines.append(
-            f"{index}. **{_display_ticker(rec)}** · {rec.score:.0f}分{strategy} · "
-            f"{_money(snap.price, snap.currency)} ({sign}{snap.change_pct:.2f}%)"
-        )
-    lines.append("")
+
+    def _append_pick_group(title: str, picks: list[Recommendation]) -> None:
+        if not picks:
+            return
+        lines.append(f"**{title}**")
+        lines.append("")
+        for index, rec in enumerate(picks[:_MAX_RESEARCH_CANDIDATES], start=1):
+            snap = rec.snapshot
+            sign = "+" if snap.change_pct >= 0 else ""
+            strategy = f" · {rec.strategy}" if rec.strategy else ""
+            lines.append(
+                f"{index}. **{_display_ticker(rec)}** · {rec.score:.0f}分{strategy} · "
+                f"{_money(snap.price, snap.currency)} ({sign}{snap.change_pct:.2f}%) · "
+                f"买 {_money(rec.buy_low, snap.currency)}~{_money(rec.buy_high, snap.currency)}"
+            )
+        lines.append("")
+
+    _append_pick_group("美股可新开仓", deploy_picks)
+    _append_pick_group("A股/澳股置换候选（需先减仓）", rotation_picks)
+
+    if not deploy_picks and not rotation_picks:
+        for index, rec in enumerate(candidates, start=1):
+            snap = rec.snapshot
+            sign = "+" if snap.change_pct >= 0 else ""
+            strategy = f" · {rec.strategy}" if rec.strategy else ""
+            lines.append(
+                f"{index}. **{_display_ticker(rec)}** · {rec.score:.0f}分{strategy} · "
+                f"{_money(snap.price, snap.currency)} ({sign}{snap.change_pct:.2f}%)"
+            )
+        lines.append("")
+
+    return lines
+
+
+def format_rotation_plan_section(rotation_plans: list[dict[str, Any]]) -> list[str]:
+    if not rotation_plans:
+        return []
+
+    from portfolio_manager import MARKET_LABELS
+
+    lines = [
+        "## 🔄 减仓置换建议",
+        "",
+        "> A股/澳股无闲置资金：先挂卖单释放资金，再挂买单（A股100股整数倍）。",
+        "",
+    ]
+    for plan in rotation_plans:
+        market_key = plan["market_key"]
+        label = MARKET_LABELS.get(market_key, market_key)
+        sellers = plan["sellers"]
+        buyers = plan["buyers"]
+        sell_names = "、".join(_display_ticker(item.recommendation) for item in sellers)
+        buy_names = "、".join(_display_ticker(rec) for rec in buyers)
+        lines.append(f"**{label}**：减 {sell_names} → 换 {buy_names}")
+        for item in sellers:
+            rec = item.recommendation
+            snap = rec.snapshot
+            order = suggest_holding_order(item, analysis=plan.get("analysis"))
+            lines.append(
+                f"- 卖 {_display_ticker(rec)}：{format_order_legs(order, snap.currency)}"
+            )
+        for rec in buyers:
+            snap = rec.snapshot
+            lines.append(
+                f"- 买 {_display_ticker(rec)}：挂 "
+                f"{_money(rec.buy_low, snap.currency)}~{_money(rec.buy_high, snap.currency)}"
+            )
+        lines.append("")
     return lines
 
 
@@ -347,6 +497,8 @@ def compose_morning_brief(
     serenity: Any | None = None,
     potential: tuple[list[Any], dict[str, str]] | None = None,
     research: list[Any] | None = None,
+    radar: tuple[list[Any], dict[str, str]] | None = None,
+    cn_funds: tuple[list[Recommendation], dict[str, str]] | None = None,
 ) -> str:
     from zoneinfo import ZoneInfo
 
@@ -366,12 +518,39 @@ def compose_morning_brief(
 
     lines.extend(format_conclusion_section(verdict))
     lines.extend(["---", ""])
+    if get_market_cash_config():
+        lines.extend(format_cash_constraints_section())
+        lines.extend(["---", ""])
     lines.extend(format_portfolio_overview_section(analysis))
     lines.extend(["---", ""])
     lines.extend(format_brief_holdings_section(verdict, regimes=regimes))
     lines.extend(["---", ""])
-    lines.extend(format_research_candidates_section(verdict["quality_picks"]))
+    lines.extend(format_holding_orders_section(analysis, regimes=regimes))
     lines.extend(["---", ""])
+    if radar is not None:
+        from radar import format_market_radar_section
+
+        picks, errors = radar
+        lines.extend(format_market_radar_section(picks, errors))
+        lines.extend(["---", ""])
+    lines.extend(
+        format_research_candidates_section(
+            verdict["quality_picks"],
+            deploy_picks=verdict["deploy_picks"],
+            rotation_picks=verdict["rotation_picks"],
+        )
+    )
+    lines.extend(["---", ""])
+    lines.extend(format_rotation_plan_section(verdict["rotation_plans"]))
+    if verdict["rotation_plans"]:
+        lines.extend(["---", ""])
+    if cn_funds is not None:
+        from cn_funds import format_cn_funds_section
+
+        fund_picks, fund_errors = cn_funds
+        lines.extend(format_cn_funds_section(fund_picks, fund_errors))
+        if fund_picks:
+            lines.extend(["---", ""])
     if potential is not None:
         from potential_screener import format_potential_radar_section
 

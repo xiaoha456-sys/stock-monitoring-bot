@@ -3,7 +3,7 @@
   "review_horizons_days": [5],
   "review": {
     "schedule": "weekly",
-    "weekday": "monday",
+    "weekday": "saturday",
     "timezone": "Australia/Sydney",
     "horizons_days": [5]
   },
@@ -53,9 +53,26 @@
       "emoji": "🇨🇳",
       "push_title": "A股每日投资简报",
       "top_n": 3,
+      "tradable": {
+        "exclude_boards": ["star", "chinext"],
+        "exclude_prefixes": ["688", "300"]
+      },
+      "funds": {
+        "enabled": true,
+        "include_in_combined_report": true,
+        "top_n": 2,
+        "watchlist": [
+          {"ticker": "510300.SS", "name": "沪深300ETF", "theme": "宽基"},
+          {"ticker": "510500.SS", "name": "中证500ETF", "theme": "宽基"},
+          {"ticker": "510880.SS", "name": "红利ETF", "theme": "红利"},
+          {"ticker": "515450.SS", "name": "红利低波50ETF", "theme": "红利"},
+          {"ticker": "512010.SS", "name": "医药ETF", "theme": "医药"},
+          {"ticker": "159928.SZ", "name": "消费ETF", "theme": "消费"}
+        ]
+      },
       "watchlist": [
-        "600519.SS", "000858.SZ", "600036.SS", "601318.SS", "300750.SZ",
-        "002594.SZ", "600900.SS", "000333.SZ", "601012.SS", "688981.SS"
+        "600519.SS", "000858.SZ", "600036.SS", "601318.SS",
+        "002594.SZ", "600900.SS", "000333.SZ", "601012.SS", "600406.SS"
       ],
       "alphasift": {
         "enabled": true,
@@ -95,10 +112,10 @@
     "NVDA": {
       "name": "英伟达",
       "market": "US",
-      "shares": null,
-      "cost_basis": null,
-      "target_price": null,
-      "stop_loss": null,
+      "shares": 20,
+      "cost_basis": 200,
+      "target_price": 225,
+      "stop_loss": 184,
       "thesis": "AI 算力核心持仓",
       "max_weight_pct": null
     },
@@ -115,48 +132,48 @@
     "RKLB": {
       "name": "Rocket Lab",
       "market": "US",
-      "shares": null,
-      "cost_basis": null,
-      "target_price": null,
-      "stop_loss": null,
+      "shares": 30,
+      "cost_basis": 103,
+      "target_price": 138,
+      "stop_loss": 94,
       "thesis": "商业航天发射",
       "max_weight_pct": null
     },
     "TLX.AX": {
       "name": "Telix",
       "market": "AU",
-      "shares": null,
-      "cost_basis": null,
-      "target_price": null,
-      "stop_loss": null,
+      "shares": 592,
+      "cost_basis": 14.12,
+      "target_price": 15.5,
+      "stop_loss": 12.1,
       "thesis": "核医学诊疗",
       "max_weight_pct": null
     },
     "RMD.AX": {
       "name": "ResMed",
       "market": "AU",
-      "shares": null,
-      "cost_basis": null,
-      "target_price": null,
-      "stop_loss": null,
+      "shares": 58,
+      "cost_basis": 27.7,
+      "target_price": 28.2,
+      "stop_loss": 25.7,
       "thesis": "睡眠呼吸设备",
       "max_weight_pct": null
     },
     "WTC.AX": {
       "name": "WiseTech",
       "market": "AU",
-      "shares": null,
-      "cost_basis": null,
-      "target_price": null,
-      "stop_loss": null,
+      "shares": 549,
+      "cost_basis": 44.9,
+      "target_price": 39.1,
+      "stop_loss": 32.8,
       "thesis": "全球物流软件",
       "max_weight_pct": null
     },
     "002402.SZ": {
       "name": "和而泰",
       "market": "CN",
-      "shares": null,
-      "cost_basis": null,
+      "shares": 3900,
+      "cost_basis": 34.955,
       "target_price": null,
       "stop_loss": null,
       "thesis": "智能控制器",
@@ -165,8 +182,8 @@
     "600406.SS": {
       "name": "国电南瑞",
       "market": "CN",
-      "shares": null,
-      "cost_basis": null,
+      "shares": 1000,
+      "cost_basis": 23.306,
       "target_price": null,
       "stop_loss": null,
       "thesis": "电网自动化",
@@ -175,8 +192,8 @@
     "002065.SZ": {
       "name": "东华软件",
       "market": "CN",
-      "shares": null,
-      "cost_basis": null,
+      "shares": 2900,
+      "cost_basis": 16.024,
       "target_price": null,
       "stop_loss": null,
       "thesis": "政企数字化",
@@ -186,7 +203,35 @@
   "portfolio": {
     "max_market_weight_pct": 55,
     "max_position_weight_pct": 25,
-    "earnings_alert_days": 14
+    "earnings_alert_days": 14,
+    "correlation_threshold": 0.75,
+    "event_move_pct": 5.0,
+    "cash": {
+      "US": {
+        "available": 30000,
+        "currency": "AUD",
+        "mode": "deploy",
+        "can_add_capital": true,
+        "note": "可加仓已有股并探索新标的，后续可追加投入"
+      },
+      "CN": {
+        "available": 0,
+        "currency": "CNY",
+        "mode": "rotate_only",
+        "can_add_capital": false,
+        "note": "无闲置资金，仅能通过减仓置换买入"
+      },
+      "AU": {
+        "available": 0,
+        "currency": "AUD",
+        "mode": "rotate_only",
+        "can_add_capital": false,
+        "note": "无闲置资金，仅能通过减仓置换买入"
+      }
+    },
+    "fx": {
+      "AUD_USD": 0.65
+    }
   },
   "potential_radar": {
     "enabled": true,
@@ -206,8 +251,7 @@
         "AAOI", "SNDK", "SMCI", "ARM", "PLTR"
       ],
       "CN": [
-        "688981.SS", "002371.SZ", "603501.SS", "688012.SS", "300474.SZ",
-        "688256.SS", "002049.SZ"
+        "002371.SZ", "603501.SS", "002049.SZ", "600406.SS", "601012.SS"
       ],
       "AU": [
         "XRO.AX", "CPU.AX", "LYC.AX", "PLS.AX", "BRN.AX"
@@ -223,6 +267,25 @@
       "rsi_overbought": 72
     },
     "disclaimer": "潜力雷达捕捉早期技术特征，需结合财报、产业链与 Serenity 式瓶颈研究验证。"
+  },
+  "market_radar": {
+    "enabled": true,
+    "include_in_combined_report": true,
+    "top_n": 5,
+    "max_per_market": 2,
+    "min_composite_score": 58,
+    "markets": {
+      "US": true,
+      "CN": true,
+      "AU": true
+    },
+    "lens_weights": {
+      "trend": 0.35,
+      "valuation": 0.25,
+      "catalyst": 0.2,
+      "risk": 0.2
+    },
+    "disclaimer": "市场雷达用于缩小研究范围，不直接替代交易决策。"
   },
   "research_agent": {
     "enabled": true,

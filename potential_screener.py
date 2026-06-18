@@ -146,6 +146,11 @@ def _universe_for_market(market_key: str) -> list[str]:
     for ticker in extra + base + holdings:
         if _market_from_ticker(ticker) != market_key:
             continue
+        if market_key == "CN":
+            from cn_tradable import is_cn_restricted_board
+
+            if is_cn_restricted_board(ticker):
+                continue
         if ticker not in merged:
             merged.append(ticker)
     return merged

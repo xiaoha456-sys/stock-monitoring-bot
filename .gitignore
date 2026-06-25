@@ -2,6 +2,8 @@
 .venv/
 .venv312/
 data/alphasift/
+data/app.db
+data/holdings_live.json
 data/predictions/
 data/tuning_history.jsonl
 __pycache__/
@@ -9,3 +11,6 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 .vendor/
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo

@@ -6,7 +6,7 @@ from cn_tradable import (
     is_cn_restricted_board,
     tradable_filter_note,
 )
-from holding_orders import (
+from domain.orders import (
     OrderLeg,
     format_order_legs,
     sell_shares_count,
@@ -132,7 +132,7 @@ class HoldingOrderTests(unittest.TestCase):
             OrderLeg(price=188.6, shares=6),
             OrderLeg(price=187.7, shares=7),
         )
-        from holding_orders import HoldingOrder
+        from domain.orders import HoldingOrder
 
         text = format_order_legs(HoldingOrder("买入", order_legs, ""), "USD")
         self.assertIn("× 6股", text)

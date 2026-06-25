@@ -1,0 +1,18 @@
+{
+  "updated_at": "2026-06-25T00:00:00+10:00",
+  "holdings": {
+    "RKLB": {
+      "shares": 60,
+      "cost_basis": 103
+    },
+    "SPCX": {
+      "shares": 51,
+      "cost_basis": 179,
+      "stop_loss": 148
+    },
+    "588000.SS": {
+      "shares": 12700,
+      "cost_basis": 1.855
+    }
+  }
+}

@@ -17,7 +17,7 @@ from portfolio_manager import (
     market_cash_mode,
 )
 from tuning import get_thresholds
-from holding_orders import format_holding_orders_section, format_order_legs, suggest_holding_order
+from domain.orders import format_holding_orders_section, format_order_legs, suggest_holding_order
 from cn_tradable import is_cn_restricted_board
 
 from stock_bot import (

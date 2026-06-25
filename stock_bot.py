@@ -15,7 +15,6 @@ from email.message import EmailMessage
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
@@ -30,18 +29,14 @@ from market_regime import (
     regime_to_dict,
     select_picks_with_regime,
 )
+from domain.config import load_config, load_config_raw
+from domain.paths import CONFIG_PATH, PREDICTIONS_DIR, REVIEW_SCORES_PATH, ROOT, SYDNEY
 from tuning import (
     get_market_tuning,
     get_price_level_params,
     get_quant_params,
     get_thresholds,
 )
-
-ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = ROOT / "portfolio_config.json"
-PREDICTIONS_DIR = ROOT / "data" / "predictions"
-REVIEW_SCORES_PATH = ROOT / "data" / "review_scores.json"
-SYDNEY = ZoneInfo("Australia/Sydney")
 
 Action = Literal["买入", "逢低关注", "观望", "减仓", "回避"]
 MARKET_ORDER = ("US", "CN", "AU")
@@ -103,6 +98,7 @@ CN_TICKER_NAMES: dict[str, str] = {
     "002402.SZ": "和而泰",
     "600406.SS": "国电南瑞",
     "002065.SZ": "东华软件",
+    "588000.SS": "科创50ETF",
 }
 
 
@@ -158,11 +154,6 @@ class Recommendation:
     name: str = ""
     strategy: str = ""
     alphasift_rank: int | None = None
-
-
-def load_config() -> dict[str, Any]:
-    with CONFIG_PATH.open(encoding="utf-8") as handle:
-        return json.load(handle)
 
 
 def calculate_rsi(close: pd.Series, period: int = 14) -> pd.Series:
@@ -1737,6 +1728,32 @@ def parse_args() -> argparse.Namespace:
         default="all",
         help="Notification channel override (default: use portfolio_config.json).",
     )
+    parser.add_argument(
+        "--list-holdings",
+        action="store_true",
+        help="Show merged holdings (portfolio_config + data/holdings_live.json).",
+    )
+    parser.add_argument(
+        "--set-holding",
+        metavar="TICKER",
+        help="Update one holding in data/holdings_live.json.",
+    )
+    parser.add_argument(
+        "--remove-holding",
+        metavar="TICKER",
+        help="Remove a holding override from data/holdings_live.json.",
+    )
+    parser.add_argument(
+        "--import-holdings",
+        metavar="CSV",
+        help="Import holdings from CSV (ticker,shares,cost_basis,market,...).",
+    )
+    parser.add_argument("--shares", type=float, help="Shares for --set-holding.")
+    parser.add_argument("--cost", type=float, help="Cost basis for --set-holding.")
+    parser.add_argument("--holding-market", choices=["US", "CN", "AU"], help="Market for --set-holding.")
+    parser.add_argument("--stop", type=float, help="Stop loss for --set-holding.")
+    parser.add_argument("--target", type=float, help="Target price for --set-holding.")
+    parser.add_argument("--name", help="Display name for --set-holding.")
     return parser.parse_args()
 
 
@@ -1751,6 +1768,63 @@ def _channel_override(args: argparse.Namespace) -> list[str] | None:
 def main() -> int:
     load_dotenv()
     args = parse_args()
+
+    if args.list_holdings or args.set_holding or args.remove_holding or args.import_holdings:
+        from holdings_store import (
+            format_holdings_table,
+            get_live_holdings,
+            import_holdings_csv,
+            live_holdings_path,
+            remove_holding,
+            update_holding,
+        )
+
+        if args.list_holdings:
+            holdings = load_config().get("holdings", {})
+            live = get_live_holdings(load_config_raw())
+            print("# 当前持仓（已合并）")
+            print("")
+            print(format_holdings_table(holdings))
+            print("")
+            if live:
+                print(f"_覆盖文件：{live_holdings_path()}_")
+            else:
+                print("_未使用 data/holdings_live.json 覆盖，仅 portfolio_config.json_")
+            return 0
+
+        if args.set_holding:
+            fields: dict[str, Any] = {}
+            if args.shares is not None:
+                fields["shares"] = args.shares
+            if args.cost is not None:
+                fields["cost_basis"] = args.cost
+            if args.holding_market:
+                fields["market"] = args.holding_market
+            if args.stop is not None:
+                fields["stop_loss"] = args.stop
+            if args.target is not None:
+                fields["target_price"] = args.target
+            if args.name:
+                fields["name"] = args.name
+            if not fields:
+                print("Error: provide at least one of --shares --cost --holding-market --stop --target --name")
+                return 1
+            ticker = args.set_holding.strip()
+            if "." not in ticker:
+                ticker = ticker.upper()
+            merged = update_holding(ticker, fields)
+            print(f"Updated {ticker}: {merged}")
+            return 0
+
+        if args.remove_holding:
+            remove_holding(args.remove_holding.strip())
+            print(f"Removed override for {args.remove_holding}")
+            return 0
+
+        if args.import_holdings:
+            import_holdings_csv(Path(args.import_holdings))
+            print(f"Imported holdings from {args.import_holdings}")
+            return 0
 
     if args.review:
         report, _ = review_predictions()

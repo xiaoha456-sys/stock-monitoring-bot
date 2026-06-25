@@ -108,6 +108,10 @@
       }
     }
   },
+  "holdings_source": {
+    "enabled": true,
+    "live_file": "data/holdings_live.json"
+  },
   "holdings": {
     "NVDA": {
       "name": "英伟达",
@@ -132,11 +136,21 @@
     "RKLB": {
       "name": "Rocket Lab",
       "market": "US",
-      "shares": 30,
+      "shares": 60,
       "cost_basis": 103,
       "target_price": 138,
       "stop_loss": 94,
       "thesis": "商业航天发射",
+      "max_weight_pct": null
+    },
+    "SPCX": {
+      "name": "SpaceX Proxy",
+      "market": "US",
+      "shares": 51,
+      "cost_basis": 179,
+      "target_price": null,
+      "stop_loss": 148,
+      "thesis": "SpaceX 关联敞口",
       "max_weight_pct": null
     },
     "TLX.AX": {
@@ -197,6 +211,16 @@
       "target_price": null,
       "stop_loss": null,
       "thesis": "政企数字化",
+      "max_weight_pct": null
+    },
+    "588000.SS": {
+      "name": "科创50ETF",
+      "market": "CN",
+      "shares": 12700,
+      "cost_basis": 1.855,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "科创板宽基 ETF 长期配置",
       "max_weight_pct": null
     }
   },

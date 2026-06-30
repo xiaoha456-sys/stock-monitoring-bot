@@ -33,6 +33,8 @@ def build_holdings_list() -> tuple[list[dict[str, Any]], dict[str, str]]:
                 "market": str(cfg.get("market") or market_key),
                 "shares": row.shares,
                 "cost_basis": row.cost_basis or cfg.get("cost_basis"),
+                "target_price": cfg.get("target_price"),
+                "stop_loss": cfg.get("stop_loss"),
                 "price": snap.price,
                 "change_pct": snap.change_pct,
                 "currency": snap.currency,

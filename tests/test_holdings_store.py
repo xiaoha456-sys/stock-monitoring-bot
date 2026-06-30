@@ -31,6 +31,7 @@ class HoldingsStoreTests(unittest.TestCase):
             save_live_holdings(
                 {"MU": {"market": "US", "shares": 5, "cost_basis": 900}},
                 path=live_path,
+                config={"holdings_source": {"enabled": True, "storage": "file"}},
             )
             payload = json.loads(live_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["holdings"]["MU"]["shares"], 5)

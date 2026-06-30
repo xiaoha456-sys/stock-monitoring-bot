@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import BriefPage from "./pages/BriefPage";
+import AddHoldingPage from "./pages/AddHoldingPage";
 import HoldingDetailPage from "./pages/HoldingDetailPage";
 import HoldingsPage from "./pages/HoldingsPage";
 
@@ -10,6 +11,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HoldingsPage />} />
           <Route path="/brief" element={<BriefPage />} />
+          <Route path="/holding/new" element={<AddHoldingPage />} />
           <Route path="/holding/:ticker" element={<HoldingDetailPage />} />
         </Routes>
       </main>

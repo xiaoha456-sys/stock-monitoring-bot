@@ -1,4 +1,4 @@
-"""Live holdings overlay: daily updates without editing portfolio_config.json."""
+"""Holdings storage: database (default) or legacy JSON overlay."""
 
 from __future__ import annotations
 
@@ -25,6 +25,15 @@ _HOLDING_FIELDS = (
 
 def _holdings_source_config(config: dict[str, Any]) -> dict[str, Any]:
     return dict(config.get("holdings_source", {}))
+
+
+def _use_database(config: dict[str, Any] | None = None) -> bool:
+    if config is None:
+        config = load_config_raw()
+    source = _holdings_source_config(config)
+    if not source.get("enabled", True):
+        return False
+    return source.get("storage", "database") != "file"
 
 
 def live_holdings_path(config: dict[str, Any] | None = None) -> Path:
@@ -75,14 +84,26 @@ def get_live_holdings(config: dict[str, Any] | None = None) -> dict[str, Any]:
         config = load_config_raw()
     if not live_holdings_enabled(config):
         return {}
+    if _use_database(config):
+        from domain.holdings_repo import list_holdings_dict
+
+        return list_holdings_dict()
     payload = _read_live_payload(live_holdings_path(config))
     holdings = payload.get("holdings", {})
     return dict(holdings) if isinstance(holdings, dict) else {}
 
 
 def resolve_holdings(config: dict[str, Any]) -> dict[str, Any]:
+    if _use_database(config):
+        from domain.holdings_repo import list_holdings_dict, seed_if_empty
+
+        seed_if_empty()
+        holdings = list_holdings_dict()
+        if holdings:
+            return holdings
+
     base = dict(config.get("holdings", {}))
-    live = get_live_holdings(config)
+    live = get_live_holdings(config) if not _use_database(config) else {}
     if not live:
         return base
     return merge_holdings(base, live)
@@ -96,6 +117,12 @@ def save_live_holdings(
 ) -> Path:
     if config is None:
         config = load_config_raw()
+    if _use_database(config):
+        from domain.holdings_repo import upsert_holding
+
+        for ticker, fields in holdings.items():
+            upsert_holding(ticker, fields)
+        return ROOT / "data" / "portfolio.db"
     target = path or live_holdings_path(config)
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -114,6 +141,12 @@ def update_holding(
 ) -> dict[str, Any]:
     if config is None:
         config = load_config_raw()
+    if _use_database(config):
+        from domain.holdings_repo import upsert_holding
+
+        base = dict(config.get("holdings", {}).get(ticker, {}))
+        return upsert_holding(ticker, fields, base=base)
+
     live = get_live_holdings(config)
     base = dict(config.get("holdings", {}).get(ticker, {}))
     patch = dict(live.get(ticker, {}))
@@ -127,6 +160,11 @@ def update_holding(
 def remove_holding(ticker: str, *, config: dict[str, Any] | None = None) -> None:
     if config is None:
         config = load_config_raw()
+    if _use_database(config):
+        from domain.holdings_repo import delete_holding
+
+        delete_holding(ticker)
+        return
     live = get_live_holdings(config)
     if ticker in live:
         del live[ticker]
@@ -140,7 +178,7 @@ def import_holdings_csv(
 ) -> dict[str, Any]:
     if config is None:
         config = load_config_raw()
-    live = get_live_holdings(config)
+    live = get_live_holdings(config) if not _use_database(config) else {}
     with csv_path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
@@ -160,16 +198,21 @@ def import_holdings_csv(
                 patch["target_price"] = float(row["target_price"])
             if row.get("stop_loss") not in (None, ""):
                 patch["stop_loss"] = float(row["stop_loss"])
-            base = dict(config.get("holdings", {}).get(ticker, {}))
-            existing = dict(live.get(ticker, {}))
-            existing.update(patch)
-            live[ticker] = {
-                key: _normalize_entry(ticker, existing, base).get(key)
-                for key in _HOLDING_FIELDS
-                if key in _normalize_entry(ticker, existing, base)
-            }
-    save_live_holdings(live, config=config)
-    return live
+            if _use_database(config):
+                base = dict(config.get("holdings", {}).get(ticker, {}))
+                update_holding(ticker, patch, config=config)
+            else:
+                base = dict(config.get("holdings", {}).get(ticker, {}))
+                existing = dict(live.get(ticker, {}))
+                existing.update(patch)
+                live[ticker] = {
+                    key: _normalize_entry(ticker, existing, base).get(key)
+                    for key in _HOLDING_FIELDS
+                    if key in _normalize_entry(ticker, existing, base)
+                }
+    if not _use_database(config):
+        save_live_holdings(live, config=config)
+    return get_live_holdings(config)
 
 
 def format_holdings_table(holdings: dict[str, Any]) -> str:

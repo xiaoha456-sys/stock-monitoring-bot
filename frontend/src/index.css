@@ -108,6 +108,11 @@ input {
   font-size: 1.5rem;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .title {
   font-weight: 700;
 }
@@ -147,6 +152,24 @@ input {
   background: transparent;
   border: 1px solid #536471;
   color: #e7e9ea;
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid #f4212e;
+  color: #f4212e;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.field select {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #2f3b47;
+  background: #0f1419;
+  color: #e7e9ea;
+  min-height: 44px;
+  font-size: 16px;
 }
 
 .field {

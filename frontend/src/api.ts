@@ -12,6 +12,8 @@ export type Holding = {
   market: string;
   shares?: number | null;
   cost_basis?: number | null;
+  target_price?: number | null;
+  stop_loss?: number | null;
   price?: number | null;
   change_pct?: number | null;
   currency?: string | null;
@@ -23,6 +25,17 @@ export type Holding = {
   action_reasons: string[];
   order?: HoldingOrder | null;
   error?: string | null;
+};
+
+export type HoldingInput = {
+  ticker: string;
+  market: string;
+  name?: string;
+  shares?: number;
+  cost_basis?: number;
+  target_price?: number;
+  stop_loss?: number;
+  thesis?: string;
 };
 
 export type BriefSection = {
@@ -46,22 +59,35 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.text();
     throw new Error(body || res.statusText);
   }
-  const data = (await res.json()) as T;
-  if (path.includes("/holdings") && !Array.isArray(data)) {
-    throw new Error("API 返回格式异常，请检查 VITE_API_BASE 或重启 dev.sh");
+  if (res.status === 204) {
+    return undefined as T;
   }
-  return data;
+  return res.json() as Promise<T>;
 }
 
 export const api = {
-  listHoldings: () => request<Holding[]>("/api/holdings"),
+  listHoldings: async () => {
+    const data = await request<Holding[]>("/api/holdings");
+    if (!Array.isArray(data)) {
+      throw new Error("API 返回格式异常，请检查 VITE_API_BASE 或重启 dev.sh");
+    }
+    return data;
+  },
   getHolding: (ticker: string) => request<Holding>(`/api/holdings/${encodeURIComponent(ticker)}`),
+  createHolding: (body: HoldingInput) =>
+    request<Holding>("/api/holdings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   updateHolding: (ticker: string, body: Record<string, number | string>) =>
     request<Holding>(`/api/holdings/${encodeURIComponent(ticker)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  deleteHolding: (ticker: string) =>
+    request<void>(`/api/holdings/${encodeURIComponent(ticker)}`, { method: "DELETE" }),
   todayBrief: () => request<Brief>("/api/brief/today"),
 };
 

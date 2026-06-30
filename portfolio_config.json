@@ -110,6 +110,7 @@
   },
   "holdings_source": {
     "enabled": true,
+    "storage": "database",
     "live_file": "data/holdings_live.json"
   },
   "holdings": {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 import HoldingsList from "../components/HoldingsList";
 
@@ -40,9 +41,14 @@ export default function HoldingsPage() {
     <div>
       <div className="page-header">
         <h1>持仓</h1>
-        <button className="btn btn-secondary" onClick={load} disabled={loading}>
-          刷新
-        </button>
+        <div className="header-actions">
+          <Link to="/holding/new" className="btn btn-secondary">
+            添加
+          </Link>
+          <button className="btn btn-secondary" onClick={load} disabled={loading}>
+            刷新
+          </button>
+        </div>
       </div>
       {error && <div className="error">{error}</div>}
       {loading ? (

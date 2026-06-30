@@ -3,6 +3,7 @@
 .venv312/
 data/alphasift/
 data/app.db
+data/portfolio.db
 data/holdings_live.json
 data/predictions/
 data/tuning_history.jsonl
@@ -13,4 +14,6 @@ __pycache__/
 .vendor/
 frontend/node_modules/
 frontend/dist/
+frontend/.env.local
+frontend/.env.production
 frontend/tsconfig.tsbuildinfo

@@ -12,6 +12,18 @@ class HoldingUpdate(BaseModel):
     stop_loss: Optional[float] = None
     name: Optional[str] = None
     market: Optional[str] = None
+    thesis: Optional[str] = None
+
+
+class HoldingCreate(BaseModel):
+    ticker: str
+    market: str
+    name: Optional[str] = None
+    shares: Optional[float] = None
+    cost_basis: Optional[float] = None
+    target_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    thesis: Optional[str] = None
 
 
 class OrderLegOut(BaseModel):
@@ -31,6 +43,8 @@ class HoldingOut(BaseModel):
     market: str
     shares: Optional[float] = None
     cost_basis: Optional[float] = None
+    target_price: Optional[float] = None
+    stop_loss: Optional[float] = None
     price: Optional[float] = None
     change_pct: Optional[float] = None
     currency: Optional[str] = None

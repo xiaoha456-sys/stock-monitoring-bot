@@ -5,15 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from domain.orders import format_holding_orders_section
+from domain.brief_display import build_display_sections
 from domain.paths import SYDNEY
 from market_regime import fetch_all_regimes
-from morning_brief import compose_morning_brief, derive_verdict, format_conclusion_section
-from portfolio_manager import (
-    analyze_portfolio,
-    format_cash_constraints_section,
-    format_portfolio_overview_section,
-)
+from morning_brief import compose_email_report, derive_verdict, format_conclusion_items
+from portfolio_manager import analyze_portfolio
 from stock_bot import MARKET_ORDER, scan_holdings, scan_market
 
 
@@ -27,10 +23,10 @@ def build_today_brief() -> dict[str, Any]:
 
     holdings_scan = scan_holdings(regimes=regimes)
     holding_recs, holding_errors = holdings_scan
-    analysis = analyze_portfolio(holding_recs)
+    analysis = analyze_portfolio(holding_recs, regimes=regimes)
     verdict = derive_verdict(analysis, market_reports)
 
-    markdown = compose_morning_brief(
+    markdown = compose_email_report(
         market_reports,
         now=now,
         regimes=regimes,
@@ -39,32 +35,15 @@ def build_today_brief() -> dict[str, Any]:
         cn_funds=None,
     )
 
-    conclusion_lines = format_conclusion_section(verdict)
-    conclusion = ""
-    for line in conclusion_lines:
-        if line.startswith("> **"):
-            conclusion = line.replace("> **", "").replace("**", "").strip()
-            break
-
-    sections: list[dict[str, Any]] = []
-
-    order_lines = format_holding_orders_section(analysis, regimes=regimes)
-    if order_lines:
-        sections.append({"title": "今日挂单", "lines": [l for l in order_lines if l and not l.startswith("|---")]})
-
-    cash_lines = format_cash_constraints_section()
-    if cash_lines:
-        sections.append({"title": "资金约束", "lines": cash_lines[2:8]})
-
-    overview_lines = format_portfolio_overview_section(analysis)
-    if overview_lines:
-        sections.append({"title": "持仓管家", "lines": overview_lines[3:12]})
+    conclusion_items = format_conclusion_items(verdict)
+    conclusion = "；".join(conclusion_items)
 
     return {
         "generated_at": now.isoformat(),
         "title": "每日持仓操作简报",
-        "conclusion": conclusion or "今日简报已生成",
-        "sections": sections,
+        "conclusion": conclusion,
+        "conclusion_items": conclusion_items,
+        "sections": build_display_sections(verdict, analysis, regimes=regimes),
         "markdown": markdown,
         "holding_errors": holding_errors,
     }

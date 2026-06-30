@@ -11,6 +11,7 @@ from domain.config import load_config_raw
 from domain.db import get_session, init_db
 from domain.models import HoldingRow
 from domain.paths import ROOT, SYDNEY
+from domain.tickers import normalize_ticker, validate_ticker
 
 _HOLDING_FIELDS = (
     "name",
@@ -58,6 +59,16 @@ def list_holdings_dict() -> dict[str, Any]:
         session.close()
 
 
+def get_holding_record(ticker: str) -> dict[str, Any] | None:
+    ticker = normalize_ticker(ticker)
+    session = get_session()
+    try:
+        row = session.get(HoldingRow, ticker)
+        return row.to_dict() if row else None
+    finally:
+        session.close()
+
+
 def count_holdings() -> int:
     session = get_session()
     try:
@@ -67,6 +78,7 @@ def count_holdings() -> int:
 
 
 def upsert_holding(ticker: str, fields: dict[str, Any], *, base: dict[str, Any] | None = None) -> dict[str, Any]:
+    ticker = validate_ticker(ticker)
     session = get_session()
     try:
         existing = session.get(HoldingRow, ticker)
@@ -93,6 +105,7 @@ def upsert_holding(ticker: str, fields: dict[str, Any], *, base: dict[str, Any] 
 
 
 def delete_holding(ticker: str) -> bool:
+    ticker = normalize_ticker(ticker)
     session = get_session()
     try:
         row = session.get(HoldingRow, ticker)

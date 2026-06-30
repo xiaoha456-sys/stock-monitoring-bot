@@ -8,6 +8,7 @@ from cn_tradable import (
 )
 from domain.orders import (
     OrderLeg,
+    format_holding_action_detail,
     format_order_legs,
     sell_shares_count,
     suggest_holding_order,
@@ -126,6 +127,18 @@ class HoldingOrderTests(unittest.TestCase):
         order = suggest_holding_order(_item(portfolio_action="继续观察", action="观望"))
         self.assertEqual(order.side, "观望")
         self.assertEqual(order.legs, ())
+
+    def test_format_holding_action_detail_sell_and_buy(self):
+        sell_item = _item(portfolio_action="降低风险", action="减仓", shares=400, price=100.0)
+        sell_order = suggest_holding_order(sell_item)
+        sell_text = format_holding_action_detail(sell_item, sell_order)
+        self.assertIn("卖出挂", sell_text)
+        self.assertIn("止损参考", sell_text)
+
+        buy_item = _item(portfolio_action="允许加仓", action="逢低关注")
+        buy_order = suggest_holding_order(buy_item)
+        buy_text = format_holding_action_detail(buy_item, buy_order)
+        self.assertIn("加仓挂", buy_text)
 
     def test_format_order_legs(self):
         order_legs = (

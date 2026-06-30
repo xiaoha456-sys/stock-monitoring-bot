@@ -16,14 +16,19 @@ from api.schemas import (
     HoldingOrderOut,
     HoldingOut,
     HoldingUpdate,
+    MarketCashOut,
+    MarketCashUpdate,
     OrderLegOut,
 )
 from domain.brief import build_today_brief
+from domain.cash_repo import seed_if_empty as seed_cash_if_empty
+from domain.cash_repo import update_market_cash
 from domain.db import init_db
 from domain.holdings import update_holding
-from domain.holdings_repo import delete_holding, seed_if_empty, upsert_holding
+from domain.holdings_repo import delete_holding, get_holding_record, seed_if_empty, upsert_holding
 from domain.paths import ROOT
 from domain.portfolio import build_holdings_list
+from domain.tickers import normalize_ticker
 
 load_dotenv(ROOT / ".env")
 
@@ -59,6 +64,25 @@ def _cached_holdings_list() -> tuple[list[dict[str, Any]], dict[str, str]]:
     return items, errors
 
 
+def _holding_out_from_record(record: dict[str, Any]) -> HoldingOut:
+    market = str(record.get("market") or "US")
+    currency = {"US": "USD", "CN": "CNY", "AU": "AUD"}.get(market, "USD")
+    return HoldingOut(
+        ticker=record["ticker"],
+        name=str(record.get("name") or record["ticker"]),
+        market=market,
+        shares=record.get("shares"),
+        cost_basis=record.get("cost_basis"),
+        target_price=record.get("target_price"),
+        stop_loss=record.get("stop_loss"),
+        currency=currency,
+        portfolio_action="继续观察",
+        action_reasons=["已保存，等待行情刷新"],
+        order=HoldingOrderOut(side="观望", legs=[], note=""),
+        error=None,
+    )
+
+
 def _holding_out_from_item(item: dict[str, Any]) -> HoldingOut:
     order_data = item.get("order") or {}
     legs = [OrderLegOut(**leg) for leg in order_data.get("legs", [])]
@@ -75,6 +99,9 @@ def _holding_out_from_item(item: dict[str, Any]) -> HoldingOut:
         cost_basis=item.get("cost_basis"),
         target_price=item.get("target_price"),
         stop_loss=item.get("stop_loss"),
+        buy_low=item.get("buy_low"),
+        buy_high=item.get("buy_high"),
+        levels_note=item.get("levels_note"),
         price=item.get("price"),
         change_pct=item.get("change_pct"),
         currency=item.get("currency"),
@@ -93,6 +120,7 @@ def _holding_out_from_item(item: dict[str, Any]) -> HoldingOut:
 async def lifespan(_: FastAPI):
     init_db()
     seed_if_empty()
+    seed_cash_if_empty()
     yield
 
 
@@ -120,44 +148,96 @@ def list_holdings() -> list[HoldingOut]:
 
 @app.post("/api/holdings", response_model=HoldingOut, status_code=201)
 def create_holding(payload: HoldingCreate) -> HoldingOut:
-    ticker = payload.ticker.strip()
-    if "." not in ticker:
-        ticker = ticker.upper()
+    ticker = normalize_ticker(payload.ticker)
     fields = payload.model_dump(exclude={"ticker"}, exclude_none=True)
     try:
-        upsert_holding(ticker, fields)
+        record = upsert_holding(ticker, fields)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     _invalidate_holdings_cache()
-    return get_holding(ticker)
+    try:
+        return get_holding(ticker)
+    except HTTPException:
+        return _holding_out_from_record(record)
 
 
 @app.get("/api/holdings/{ticker}", response_model=HoldingOut)
 def get_holding(ticker: str) -> HoldingOut:
+    ticker = normalize_ticker(ticker)
     for item in list_holdings():
-        if item.ticker == ticker:
+        if normalize_ticker(item.ticker) == ticker:
             return item
+    record = get_holding_record(ticker)
+    if record:
+        return _holding_out_from_record(record)
     raise HTTPException(status_code=404, detail="holding not found")
 
 
 @app.put("/api/holdings/{ticker}", response_model=HoldingOut)
 def patch_holding(ticker: str, payload: HoldingUpdate) -> HoldingOut:
+    ticker = normalize_ticker(ticker)
     fields = payload.model_dump(exclude_none=True)
     if not fields:
         raise HTTPException(status_code=400, detail="no fields to update")
     try:
-        update_holding(ticker, fields)
+        record = update_holding(ticker, fields)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     _invalidate_holdings_cache()
-    return get_holding(ticker)
+    try:
+        return get_holding(ticker)
+    except HTTPException:
+        return _holding_out_from_record(record)
 
 
 @app.delete("/api/holdings/{ticker}", status_code=204)
 def delete_holding_route(ticker: str) -> None:
-    if not delete_holding(ticker):
+    if not delete_holding(normalize_ticker(ticker)):
         raise HTTPException(status_code=404, detail="holding not found")
     _invalidate_holdings_cache()
+
+
+def _market_cash_out(market: str, entry: dict[str, Any]) -> MarketCashOut:
+    from portfolio_manager import CASH_MODE_LABELS, MARKET_LABELS, format_market_cash_amount
+
+    mode = str(entry.get("mode", "rotate_only"))
+    return MarketCashOut(
+        market=market,
+        label=MARKET_LABELS.get(market, market),
+        available=float(entry.get("available", 0) or 0),
+        currency=str(entry.get("currency", "USD")).upper(),
+        mode=mode,
+        mode_label=CASH_MODE_LABELS.get(mode, mode),
+        can_add_capital=bool(entry.get("can_add_capital", False)),
+        display_amount=format_market_cash_amount(market),
+        note=str(entry.get("note") or ""),
+    )
+
+
+@app.get("/api/cash", response_model=list[MarketCashOut])
+def list_market_cash_api() -> list[MarketCashOut]:
+    from portfolio_manager import MARKET_ORDER, get_market_cash_config
+
+    cfg = get_market_cash_config()
+    return [_market_cash_out(market, cfg.get(market, {})) for market in MARKET_ORDER if market in cfg]
+
+
+@app.put("/api/cash/{market}", response_model=MarketCashOut)
+def patch_market_cash(market: str, payload: MarketCashUpdate) -> MarketCashOut:
+    market_key = market.upper()
+    fields = payload.model_dump(exclude_none=True)
+    if not fields:
+        raise HTTPException(status_code=400, detail="no fields to update")
+    if "mode" in fields and fields["mode"] not in ("deploy", "rotate_only"):
+        raise HTTPException(status_code=400, detail="mode must be deploy or rotate_only")
+    try:
+        if "mode" in fields:
+            fields["can_add_capital"] = fields["mode"] == "deploy"
+        updated = update_market_cash(market_key, fields)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _invalidate_holdings_cache()
+    return _market_cash_out(market_key, updated)
 
 
 @app.get("/api/brief/today", response_model=BriefOut)
@@ -170,6 +250,7 @@ def today_brief() -> BriefOut:
         generated_at=data["generated_at"],
         title=data["title"],
         conclusion=data["conclusion"],
+        conclusion_items=data.get("conclusion_items", []),
         sections=[BriefSectionOut(**section) for section in data.get("sections", [])],
         markdown=data.get("markdown", ""),
     )

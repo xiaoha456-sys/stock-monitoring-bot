@@ -186,6 +186,95 @@ def format_order_legs(order: HoldingOrder, currency: str) -> str:
     )
 
 
+def format_holding_action_detail(item: EnrichedHolding, order: HoldingOrder) -> str:
+    """One-line actionable price guidance for merged holdings display."""
+    rec = item.recommendation
+    snap = rec.snapshot
+    currency = snap.currency
+
+    if order.side == "卖出":
+        if order.legs:
+            leg = order.legs[0]
+            stop = item.user_stop if item.user_stop is not None else rec.stop_loss
+            return (
+                f"卖出挂 {_money(leg.price, currency)} × {leg.shares}股"
+                f"（止损参考 {_money(stop, currency)}）"
+            )
+        return order.note or "建议减仓"
+
+    if order.side == "买入":
+        if order.legs:
+            return f"加仓挂 {format_order_legs(order, currency)}"
+        low, high = _buy_limit_prices(rec)
+        return f"加仓挂 {_money(low, currency)}~{_money(high, currency)}"
+
+    if item.portfolio_action in ("允许加仓", "置换加仓"):
+        return (
+            f"回踩加仓区 {_money(rec.buy_low, currency)}~{_money(rec.buy_high, currency)}"
+        )
+
+    if order.note:
+        return order.note
+    return "持有观察"
+
+
+def format_merged_holdings_section(
+    analysis: PortfolioAnalysis,
+    regimes: dict[str, MarketRegime] | None = None,
+) -> list[str]:
+    valued = [
+        item
+        for item in analysis.holdings
+        if item.shares is not None and item.market_value is not None
+    ]
+    if not valued:
+        return []
+
+    lines = [
+        "> 行情、仓位与今日可执行挂单价合一展示；A股100股整数倍。",
+        "",
+    ]
+
+    for market_key in MARKET_ORDER:
+        group = [item for item in valued if _holding_market(item.recommendation.ticker) == market_key]
+        if not group:
+            continue
+        label = MARKET_LABELS.get(market_key, market_key)
+        lines.append(f"### {label}")
+        lines.append("")
+        lines.extend(
+            [
+                "| 标的 | 现价 | 浮盈亏 | 仓位 | 建议操作 |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        )
+        for item in sorted(group, key=lambda h: -(h.weight_pct or 0)):
+            rec = item.recommendation
+            snap = rec.snapshot
+            sign = "+" if snap.change_pct >= 0 else ""
+            pnl = f"{item.pnl_pct:+.1f}%" if item.pnl_pct is not None else "—"
+            weight = f"{item.weight_pct:.1f}%" if item.weight_pct is not None else "—"
+            regime = (regimes or {}).get(market_key)
+            order = suggest_holding_order(item, regime=regime, analysis=analysis)
+            action_detail = format_holding_action_detail(item, order)
+            lines.append(
+                f"| {_display_ticker(rec)} | "
+                f"{_money(snap.price, snap.currency)} ({sign}{snap.change_pct:.2f}%) "
+                f"| {pnl} | {weight} | "
+                f"**{item.portfolio_action}** · {action_detail} |"
+            )
+        lines.append("")
+
+    cash_note_parts = []
+    us_cash = format_market_cash_amount("US")
+    if float(get_market_cash_config().get("US", {}).get("available", 0) or 0) > 0:
+        cash_note_parts.append(f"美股可用 {us_cash}")
+    cash_note_parts.append("A股/澳股：先挂卖单，成交后再挂买单")
+    lines.append(f"**资金提示**：{' · '.join(cash_note_parts)}")
+    lines.append("")
+    return lines
+
+
 def suggest_holding_order(
     item: EnrichedHolding,
     regime: MarketRegime | None = None,
@@ -203,7 +292,7 @@ def suggest_holding_order(
         if rec.action in ("减仓", "回避") or (item.pnl_pct is not None and item.pnl_pct < -10):
             note = f"反弹减仓；止损参考 {_money(item.user_stop or rec.stop_loss, snap.currency)}{regime_note}"
         elif item.user_target and snap.price >= item.user_target * 0.98:
-            note = f"已达自设目标附近，可考虑止盈{regime_note}"
+            note = f"已达今日目标附近，可考虑止盈{regime_note}"
         else:
             note = f"降低集中度或技术偏弱，挂反弹卖单{regime_note}"
         return HoldingOrder(side="卖出", legs=legs, note=note)
@@ -245,10 +334,8 @@ def format_holding_orders_section(
     lines = [
         "## 📋 持仓今日挂单",
         "",
-        "> 给出今日可执行的限价与股数；美股可现金买入，A股/澳股仅减仓置换（A股100股整数倍）。",
+        "> 可执行的限价与股数；美股可现金买入，A股/澳股仅减仓置换（A股100股整数倍）。",
         "",
-        "| 标的 | 现价 | 操作 | 挂单明细 | 说明 |",
-        "| --- | --- | --- | --- | --- |",
     ]
 
     for market_key in MARKET_ORDER:
@@ -256,7 +343,14 @@ def format_holding_orders_section(
         if not group:
             continue
         label = MARKET_LABELS.get(market_key, market_key)
-        lines.append(f"| **{label}** | | | | |")
+        lines.append(f"### {label}")
+        lines.append("")
+        lines.extend(
+            [
+                "| 标的 | 现价 | 操作 | 挂单 | 说明 |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        )
         for item in sorted(group, key=lambda h: -(h.weight_pct or 0)):
             rec = item.recommendation
             snap = rec.snapshot
@@ -268,6 +362,7 @@ def format_holding_orders_section(
                 f"{_money(snap.price, snap.currency)} ({sign}{snap.change_pct:.2f}%) | "
                 f"**{order.side}** | {format_order_legs(order, snap.currency)} | {order.note} |"
             )
+        lines.append("")
 
     cash_note_parts = []
     us_cash = format_market_cash_amount("US")

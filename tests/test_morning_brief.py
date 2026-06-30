@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from morning_brief import (
+    compose_email_report,
     compose_morning_brief,
     derive_verdict,
     format_conclusion_section,
@@ -55,22 +56,26 @@ class MorningBriefTests(unittest.TestCase):
     def test_combined_report_puts_conclusion_first(self):
         buy_rec = build_recommendation(_sample_snapshot())
         now = datetime(2026, 6, 13, 10, tzinfo=ZoneInfo("Australia/Sydney"))
-        report = compose_morning_brief(
+        report = compose_email_report(
             {"US": ([buy_rec], [], {}, {})},
             now=now,
             holdings=([], {}),
         )
+        holdings_pos = report.index("# 一、持仓")
+        cash_pos = report.index("# 二、资金")
+        brief_pos = report.index("# 三、简报")
         conclusion_pos = report.index("## 📌 今日结论")
         appendix_pos = report.index("## 附录：技术详情")
-        portfolio_pos = report.index("## 📊 持仓管家")
-        cash_pos = report.index("## 💵 资金约束")
-        self.assertLess(conclusion_pos, cash_pos)
-        self.assertLess(cash_pos, portfolio_pos)
-        self.assertLess(portfolio_pos, appendix_pos)
+        self.assertLess(holdings_pos, cash_pos)
+        self.assertLess(cash_pos, brief_pos)
+        self.assertLess(brief_pos, conclusion_pos)
+        self.assertLess(conclusion_pos, appendix_pos)
+        self.assertNotIn("## 📊 持仓管家", report)
+        self.assertIn("# 一、持仓", report)
         self.assertIn("## 💰 候选价格参考", report)
-        self.assertIn("仅减仓置换", report)
+        self.assertIn("减仓置换", report)
 
-    def test_holdings_show_only_actionable_in_events(self):
+    def test_holdings_orders_in_email_holdings_section(self):
         add_rec = build_recommendation(_sample_snapshot(ticker="MU"))
         add_rec = Recommendation(
             ticker=add_rec.ticker,
@@ -101,13 +106,21 @@ class MorningBriefTests(unittest.TestCase):
         )
         analysis = analyze_portfolio([add_rec, observe], {"MU": {}, "NVDA": {}})
         verdict = derive_verdict(analysis, {})
-        from morning_brief import format_brief_holdings_section
+        now = datetime(2026, 6, 13, 10, tzinfo=ZoneInfo("Australia/Sydney"))
+        report = compose_morning_brief({}, now=now, holdings=([add_rec, observe], {}))
+        self.assertNotIn("## 💼 持仓事件", report)
+        self.assertNotIn("### 今日挂单", report)
+        self.assertNotIn("# 一、持仓", report)
+        self.assertNotIn("持仓关注", report)
+        email = compose_email_report({}, now=now, holdings=([add_rec, observe], {}))
+        self.assertIn("# 一、持仓", email)
+        self.assertIn("建议操作", email)
+        self.assertNotIn("### 今日挂单", email)
+        from domain.brief_display import build_display_sections
 
-        text = "\n".join(format_brief_holdings_section(verdict))
-        self.assertIn("美光 (MU)", text)
-        self.assertIn("继续观察", text)
-        self.assertIn("英伟达 (NVDA)", text)
-        self.assertNotIn("## 💼 持仓今日操作指南", text)
+        sections = build_display_sections(verdict, analysis)
+        self.assertFalse(any(section["title"] == "持仓关注" for section in sections))
+        self.assertFalse(any(section["title"] == "今日挂单" for section in sections))
 
     def test_appendix_keeps_full_market_section(self):
         rec = build_recommendation(_sample_snapshot())

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, String, Text
+from sqlalchemy import Boolean, DateTime, Float, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from domain.db import Base
@@ -36,4 +36,25 @@ class HoldingRow(Base):
             "stop_loss": self.stop_loss,
             "thesis": self.thesis,
             "max_weight_pct": self.max_weight_pct,
+        }
+
+
+class MarketCashRow(Base):
+    __tablename__ = "market_cash"
+
+    market: Mapped[str] = mapped_column(String(8), primary_key=True)
+    available: Mapped[float] = mapped_column(Float, default=0.0)
+    currency: Mapped[str] = mapped_column(String(8), default="USD")
+    mode: Mapped[str] = mapped_column(String(16), default="rotate_only")
+    can_add_capital: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "available": self.available,
+            "currency": self.currency,
+            "mode": self.mode,
+            "can_add_capital": self.can_add_capital,
+            "note": self.note,
         }

@@ -139,6 +139,9 @@ def update_holding(
     *,
     config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from domain.tickers import normalize_ticker
+
+    ticker = normalize_ticker(ticker)
     if config is None:
         config = load_config_raw()
     if _use_database(config):
@@ -158,6 +161,9 @@ def update_holding(
 
 
 def remove_holding(ticker: str, *, config: dict[str, Any] | None = None) -> None:
+    from domain.tickers import normalize_ticker
+
+    ticker = normalize_ticker(ticker)
     if config is None:
         config = load_config_raw()
     if _use_database(config):

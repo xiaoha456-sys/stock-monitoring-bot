@@ -12,12 +12,10 @@ from portfolio_manager import (
     PortfolioAnalysis,
     analyze_portfolio,
     format_cash_constraints_section,
-    format_portfolio_overview_section,
-    get_market_cash_config,
     market_cash_mode,
 )
 from tuning import get_thresholds
-from domain.orders import format_holding_orders_section, format_order_legs, suggest_holding_order
+from domain.orders import format_merged_holdings_section, format_order_legs, suggest_holding_order
 from cn_tradable import is_cn_restricted_board
 
 from stock_bot import (
@@ -26,7 +24,6 @@ from stock_bot import (
     _combined_report_title,
     _display_ticker,
     _holding_market,
-    _holding_today_action,
     _market_section_lines,
     _market_section_note,
     _money,
@@ -139,35 +136,43 @@ def derive_verdict(
     }
 
 
-def format_conclusion_section(verdict: dict[str, Any]) -> list[str]:
-    lines = ["## 📌 今日结论", ""]
+def format_conclusion_items(verdict: dict[str, Any]) -> list[str]:
     if verdict["no_action_today"]:
-        lines.append("> **今日不操作** — 持仓无需调整，观察池暂无达标候选。")
-        lines.append("")
-        return lines
+        return ["今日不操作 — 持仓无需调整，观察池暂无达标候选。"]
 
     parts: list[str] = []
     if verdict["add_holdings"]:
         names = "、".join(
             _display_ticker(item.recommendation) for item in verdict["add_holdings"][:3]
         )
-        parts.append(f"美股可加仓 {len(verdict['add_holdings'])} 只（{names}）")
+        parts.append(f"可加仓 {len(verdict['add_holdings'])} 只：{names}")
     if verdict["rotate_holdings"]:
         names = "、".join(
             _display_ticker(item.recommendation) for item in verdict["rotate_holdings"][:3]
         )
-        parts.append(f"置换加仓 {len(verdict['rotate_holdings'])} 只（{names}，需先减仓）")
+        parts.append(f"置换加仓 {len(verdict['rotate_holdings'])} 只：{names}（需先减仓）")
     if verdict["reduce_holdings"]:
         names = "、".join(
             _display_ticker(item.recommendation) for item in verdict["reduce_holdings"][:3]
         )
-        parts.append(f"持仓降低风险 {len(verdict['reduce_holdings'])} 只（{names}）")
+        parts.append(f"降低风险 {len(verdict['reduce_holdings'])} 只：{names}")
     if verdict["deploy_picks"]:
         parts.append(f"美股观察池 {len(verdict['deploy_picks'])} 个候选可新开仓")
     if verdict["rotation_picks"]:
-        parts.append(f"A股/澳股 {len(verdict['rotation_picks'])} 个置换候选（减仓后买入）")
+        parts.append(f"A股/澳股 {len(verdict['rotation_picks'])} 个置换候选")
+    return parts
 
-    lines.append(f"> **{'；'.join(parts)}**")
+
+def format_conclusion_section(verdict: dict[str, Any]) -> list[str]:
+    lines = ["## 📌 今日结论", ""]
+    items = format_conclusion_items(verdict)
+    if verdict["no_action_today"]:
+        lines.append(f"> **{items[0]}**")
+    else:
+        lines.append("**今日要事**")
+        lines.append("")
+        for item in items:
+            lines.append(f"- {item}")
     lines.append("")
     return lines
 
@@ -190,14 +195,14 @@ def format_brief_holdings_section(
     lines = [
         "## 💼 持仓事件",
         "",
-        "> 仅列出需关注的持仓；完整仓位与盈亏见「持仓管家」。",
+        "> 仅列出需关注的持仓。",
         "",
     ]
 
     if actionable:
         lines.extend(
             [
-                "| 标的 | 现价 | 建议 | 操作要点 |",
+                "| 标的 | 现价 | 建议 | 原因 |",
                 "| --- | --- | --- | --- |",
             ]
         )
@@ -205,9 +210,7 @@ def format_brief_holdings_section(
             rec = item.recommendation
             snap = rec.snapshot
             sign = "+" if snap.change_pct >= 0 else ""
-            regime = (regimes or {}).get(_holding_market(rec.ticker))
-            today_action = _holding_today_action(rec, regime)
-            reason = item.action_reasons[0] if item.action_reasons else today_action
+            reason = item.action_reasons[0] if item.action_reasons else "—"
             lines.append(
                 f"| {_display_ticker(rec)} | "
                 f"{_money(snap.price, snap.currency)} ({sign}{snap.change_pct:.2f}%) | "
@@ -488,7 +491,110 @@ def format_appendix_section(
     return lines
 
 
-def compose_morning_brief(
+def format_holdings_email_section(
+    analysis: PortfolioAnalysis,
+    regimes: dict[str, MarketRegime] | None = None,
+) -> list[str]:
+    lines = [
+        "# 一、持仓",
+        "",
+    ]
+    merged = format_merged_holdings_section(analysis, regimes=regimes)
+    if merged:
+        lines.extend(merged)
+    else:
+        lines.append("_暂无持仓记录。_")
+        lines.append("")
+    return lines
+
+
+def format_cash_email_section() -> list[str]:
+    body = format_cash_constraints_section()
+    if not body:
+        return []
+    lines = [
+        "# 二、资金",
+        "",
+        "> 各市场可用资金与操作模式。",
+        "",
+    ]
+    for line in body:
+        if line.startswith("## 💵") or line.startswith("> 各市场可用资金与操作模式"):
+            continue
+        lines.append(line)
+    return lines
+
+
+def compose_brief_sections(
+    verdict: dict[str, Any],
+    analysis: PortfolioAnalysis,
+    market_reports: dict[str, tuple[list[Recommendation], list[Recommendation], dict[str, str], dict[str, Any]]],
+    regimes: dict[str, MarketRegime] | None = None,
+    holdings: tuple[list[Recommendation], dict[str, str]] | None = None,
+    social: Any | None = None,
+    serenity: Any | None = None,
+    potential: tuple[list[Any], dict[str, str]] | None = None,
+    research: list[Any] | None = None,
+    radar: tuple[list[Any], dict[str, str]] | None = None,
+    cn_funds: tuple[list[Recommendation], dict[str, str]] | None = None,
+) -> list[str]:
+    lines: list[str] = [
+        "# 三、简报",
+        "",
+        "> 市场结论、候选研究与技术附录。",
+        "",
+    ]
+    lines.extend(format_conclusion_section(verdict))
+    lines.append("")
+    if radar is not None:
+        from radar import format_market_radar_section
+
+        picks, errors = radar
+        lines.extend(format_market_radar_section(picks, errors))
+        lines.append("")
+    lines.extend(
+        format_research_candidates_section(
+            verdict["quality_picks"],
+            deploy_picks=verdict["deploy_picks"],
+            rotation_picks=verdict["rotation_picks"],
+        )
+    )
+    lines.append("")
+    lines.extend(format_rotation_plan_section(verdict["rotation_plans"]))
+    if verdict["rotation_plans"]:
+        lines.append("")
+    if cn_funds is not None:
+        from cn_funds import format_cn_funds_section
+
+        fund_picks, fund_errors = cn_funds
+        lines.extend(format_cn_funds_section(fund_picks, fund_errors))
+        if fund_picks:
+            lines.append("")
+    if potential is not None:
+        from potential_screener import format_potential_radar_section
+
+        picks, errors = potential
+        lines.extend(format_potential_radar_section(picks, errors))
+        lines.append("")
+    if research:
+        from research_agent import format_research_agent_section
+
+        lines.extend(format_research_agent_section(research))
+        lines.append("")
+    lines.extend(format_risk_section(verdict, regimes, market_reports, social))
+    lines.append("")
+    lines.extend(format_price_table_section(analysis, verdict["quality_picks"]))
+    lines.extend(format_appendix_section(market_reports, holdings, regimes, social, serenity))
+    lines.extend(
+        [
+            "",
+            "**提示**：优先在建议买入区间内分批建仓；触及止损参考位需重新评估。",
+        ]
+    )
+    return lines
+
+
+def compose_email_report(
     market_reports: dict[str, tuple[list[Recommendation], list[Recommendation], dict[str, str], dict[str, Any]]],
     now: datetime | None = None,
     regimes: dict[str, MarketRegime] | None = None,
@@ -505,8 +611,59 @@ def compose_morning_brief(
     sydney = ZoneInfo("Australia/Sydney")
     report_time = (now or datetime.now(sydney)).astimezone(sydney)
     holding_recs = holdings[0] if holdings else []
-    analysis = analyze_portfolio(holding_recs)
+    analysis = analyze_portfolio(holding_recs, regimes=regimes)
+    verdict = derive_verdict(analysis, market_reports)
 
+    lines = [
+        f"# {_combined_report_title()}",
+        f"**{report_time:%Y-%m-%d %H:%M}** 悉尼时间",
+        "",
+        "> 持仓 + 资金 + 简报。仅供研究，不构成投资建议。",
+        "",
+    ]
+    lines.extend(format_holdings_email_section(analysis, regimes=regimes))
+    lines.extend(["", "---", ""])
+    cash_lines = format_cash_email_section()
+    if cash_lines:
+        lines.extend(cash_lines)
+        lines.extend(["", "---", ""])
+    lines.extend(
+        compose_brief_sections(
+            verdict,
+            analysis,
+            market_reports,
+            regimes=regimes,
+            holdings=holdings,
+            social=social,
+            serenity=serenity,
+            potential=potential,
+            research=research,
+            radar=radar,
+            cn_funds=cn_funds,
+        )
+    )
+    return "\n".join(lines)
+
+
+def compose_morning_brief(
+    market_reports: dict[str, tuple[list[Recommendation], list[Recommendation], dict[str, str], dict[str, Any]]],
+    now: datetime | None = None,
+    regimes: dict[str, MarketRegime] | None = None,
+    holdings: tuple[list[Recommendation], dict[str, str]] | None = None,
+    social: Any | None = None,
+    serenity: Any | None = None,
+    potential: tuple[list[Any], dict[str, str]] | None = None,
+    research: list[Any] | None = None,
+    radar: tuple[list[Any], dict[str, str]] | None = None,
+    cn_funds: tuple[list[Recommendation], dict[str, str]] | None = None,
+) -> str:
+    """Brief-only markdown (part 3); email push uses compose_email_report."""
+    from zoneinfo import ZoneInfo
+
+    sydney = ZoneInfo("Australia/Sydney")
+    report_time = (now or datetime.now(sydney)).astimezone(sydney)
+    holding_recs = holdings[0] if holdings else []
+    analysis = analyze_portfolio(holding_recs, regimes=regimes)
     verdict = derive_verdict(analysis, market_reports)
     lines = [
         f"# {_combined_report_title()}",
@@ -515,62 +672,19 @@ def compose_morning_brief(
         "> 结论前置、技术后置。仅供研究，不构成投资建议。",
         "",
     ]
-
-    lines.extend(format_conclusion_section(verdict))
-    lines.extend(["---", ""])
-    if get_market_cash_config():
-        lines.extend(format_cash_constraints_section())
-        lines.extend(["---", ""])
-    lines.extend(format_portfolio_overview_section(analysis))
-    lines.extend(["---", ""])
-    lines.extend(format_brief_holdings_section(verdict, regimes=regimes))
-    lines.extend(["---", ""])
-    lines.extend(format_holding_orders_section(analysis, regimes=regimes))
-    lines.extend(["---", ""])
-    if radar is not None:
-        from radar import format_market_radar_section
-
-        picks, errors = radar
-        lines.extend(format_market_radar_section(picks, errors))
-        lines.extend(["---", ""])
-    lines.extend(
-        format_research_candidates_section(
-            verdict["quality_picks"],
-            deploy_picks=verdict["deploy_picks"],
-            rotation_picks=verdict["rotation_picks"],
-        )
+    brief_body = compose_brief_sections(
+        verdict,
+        analysis,
+        market_reports,
+        regimes=regimes,
+        holdings=holdings,
+        social=social,
+        serenity=serenity,
+        potential=potential,
+        research=research,
+        radar=radar,
+        cn_funds=cn_funds,
     )
-    lines.extend(["---", ""])
-    lines.extend(format_rotation_plan_section(verdict["rotation_plans"]))
-    if verdict["rotation_plans"]:
-        lines.extend(["---", ""])
-    if cn_funds is not None:
-        from cn_funds import format_cn_funds_section
-
-        fund_picks, fund_errors = cn_funds
-        lines.extend(format_cn_funds_section(fund_picks, fund_errors))
-        if fund_picks:
-            lines.extend(["---", ""])
-    if potential is not None:
-        from potential_screener import format_potential_radar_section
-
-        picks, errors = potential
-        lines.extend(format_potential_radar_section(picks, errors))
-        lines.extend(["---", ""])
-    if research:
-        from research_agent import format_research_agent_section
-
-        lines.extend(format_research_agent_section(research))
-        lines.extend(["---", ""])
-    lines.extend(format_risk_section(verdict, regimes, market_reports, social))
-    lines.extend(["---", ""])
-    lines.extend(format_price_table_section(analysis, verdict["quality_picks"]))
-    lines.extend(format_appendix_section(market_reports, holdings, regimes, social, serenity))
-
-    lines.extend(
-        [
-            "",
-            "**提示**：优先在建议买入区间内分批建仓；触及止损参考位需重新评估。",
-        ]
-    )
+    # Drop the part-3 heading; email report keeps it inside compose_brief_sections.
+    lines.extend(line for line in brief_body if not line.startswith("# 三、简报"))
     return "\n".join(lines)

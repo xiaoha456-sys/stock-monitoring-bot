@@ -1,5 +1,62 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, Brief } from "../api";
+import { api, Brief, BriefRow, BriefSection } from "../api";
+
+function toneClass(tone: string) {
+  if (tone === "positive") return "brief-badge-positive";
+  if (tone === "negative") return "brief-badge-negative";
+  if (tone === "warn") return "brief-badge-warn";
+  return "brief-badge-neutral";
+}
+
+function SectionBlock({ section }: { section: BriefSection }) {
+  const isMarketHeader = (row: BriefRow) =>
+    row.badge === "" && row.detail === "" && row.secondary === "" && row.subdetail === "";
+
+  return (
+    <div className="card brief-section">
+      <div className="brief-section-head">
+        <div className="section-title">{section.title}</div>
+        {section.subtitle && <p className="muted brief-subtitle">{section.subtitle}</p>}
+      </div>
+
+      {section.kind === "rows" && (section.rows?.length ?? 0) > 0 && (
+        <div className="brief-rows">
+          {section.rows!.map((row, index) =>
+            isMarketHeader(row) ? (
+              <div key={`${row.primary}-${index}`} className="brief-market-label">
+                {row.primary}
+              </div>
+            ) : (
+              <div key={`${row.primary}-${index}`} className="brief-row">
+                <div className="brief-row-main">
+                  <div className="brief-row-title">{row.primary}</div>
+                  {row.secondary && <div className="muted brief-row-meta">{row.secondary}</div>}
+                </div>
+                {row.badge && (
+                  <span className={`brief-badge ${toneClass(row.badge_tone)}`}>{row.badge}</span>
+                )}
+                {(row.detail || row.subdetail) && (
+                  <div className="brief-row-detail">
+                    {row.detail && <div>{row.detail}</div>}
+                    {row.subdetail && <div className="muted">{row.subdetail}</div>}
+                  </div>
+                )}
+              </div>
+            ),
+          )}
+        </div>
+      )}
+
+      {section.kind === "text" && (section.lines?.length ?? 0) > 0 && (
+        <ul className="brief-list">
+          {section.lines!.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function BriefPage() {
   const [brief, setBrief] = useState<Brief | null>(null);
@@ -35,26 +92,31 @@ export default function BriefPage() {
       {error && <div className="error">{error}</div>}
       {brief && (
         <>
-          <div className="card highlight">
+          <div className="card highlight brief-conclusion">
             <div className="section-title">今日结论</div>
-            <p>{brief.conclusion}</p>
-            <p className="muted">{new Date(brief.generated_at).toLocaleString()}</p>
+            {brief.conclusion_items && brief.conclusion_items.length > 0 ? (
+              <ul className="brief-conclusion-list">
+                {brief.conclusion_items.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>{brief.conclusion}</p>
+            )}
+            <p className="muted brief-time">
+              {new Date(brief.generated_at).toLocaleString()}
+            </p>
           </div>
+
           {brief.sections.map((section) => (
-            <div className="card" key={section.title}>
-              <div className="section-title">{section.title}</div>
-              <div className="pre-wrap markdown-lite">
-                {section.lines
-                  .filter((line) => line && !line.startsWith("| **") && line !== "| --- | --- | --- | --- | --- |")
-                  .join("\n")}
-              </div>
-            </div>
+            <SectionBlock key={section.title} section={section} />
           ))}
-          <button className="btn btn-secondary" onClick={() => setShowFull((v) => !v)}>
-            {showFull ? "收起完整简报" : "查看完整 Markdown"}
+
+          <button className="btn btn-secondary brief-full-toggle" onClick={() => setShowFull((v) => !v)}>
+            {showFull ? "收起完整简报" : "查看完整邮件版"}
           </button>
           {showFull && (
-            <div className="card markdown-lite pre-wrap">{brief.markdown}</div>
+            <div className="card markdown-lite pre-wrap brief-markdown">{brief.markdown}</div>
           )}
         </>
       )}

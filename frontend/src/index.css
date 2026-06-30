@@ -49,7 +49,7 @@ input {
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   background: rgba(15, 20, 25, 0.96);
   border-top: 1px solid #2f3b47;
   padding-bottom: env(safe-area-inset-bottom);
@@ -204,6 +204,193 @@ input {
 .markdown-lite {
   font-size: 0.92rem;
   line-height: 1.55;
+}
+
+.brief-conclusion {
+  margin-bottom: 14px;
+}
+
+.brief-conclusion-list {
+  margin: 8px 0 0;
+  padding-left: 1.2rem;
+}
+
+.brief-conclusion-list li {
+  margin-bottom: 6px;
+}
+
+.brief-time {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+}
+
+.brief-section {
+  margin-bottom: 14px;
+}
+
+.brief-section-head {
+  margin-bottom: 10px;
+}
+
+.brief-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.88rem;
+}
+
+.brief-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.brief-market-label {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #8b98a5;
+  letter-spacing: 0.02em;
+}
+
+.brief-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  padding: 10px 0;
+  border-top: 1px solid #2f3b47;
+}
+
+.brief-row:first-child,
+.brief-market-label + .brief-row {
+  border-top: none;
+  padding-top: 0;
+}
+
+.brief-row-title {
+  font-weight: 700;
+}
+
+.brief-row-meta {
+  font-size: 0.88rem;
+  margin-top: 2px;
+}
+
+.brief-row-detail {
+  grid-column: 1 / -1;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.brief-badge {
+  align-self: start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.brief-badge-positive {
+  background: rgba(0, 186, 124, 0.15);
+  color: #00ba7c;
+}
+
+.brief-badge-negative {
+  background: rgba(244, 33, 46, 0.15);
+  color: #f4212e;
+}
+
+.brief-badge-warn {
+  background: rgba(255, 173, 31, 0.15);
+  color: #ffad1f;
+}
+
+.brief-badge-neutral {
+  background: #22303c;
+  color: #8b98a5;
+}
+
+.brief-list {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.brief-list li {
+  margin-bottom: 6px;
+}
+
+.brief-full-toggle {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.brief-markdown {
+  font-size: 0.85rem;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.holding-card {
+  margin-bottom: 0;
+}
+
+.holding-action-line {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #121a22;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.today-orders-note {
+  margin: 4px 0 12px;
+  font-size: 0.88rem;
+}
+
+.today-orders-market + .today-orders-market {
+  margin-top: 14px;
+}
+
+.today-market-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #8b98a5;
+  margin-bottom: 8px;
+}
+
+.today-orders-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.today-order-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  padding: 12px;
+  border: 1px solid #2f3b47;
+  border-radius: 12px;
+  background: #121a22;
+}
+
+.today-order-row:hover {
+  border-color: #3d4f61;
+}
+
+.today-order-title {
+  font-weight: 700;
+}
+
+.today-order-meta {
+  font-size: 0.88rem;
+  margin-top: 2px;
+}
+
+.today-order-detail {
+  grid-column: 1 / -1;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .error {

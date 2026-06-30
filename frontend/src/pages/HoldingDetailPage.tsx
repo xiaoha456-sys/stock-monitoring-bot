@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, changeClass, formatMoney, formatOrder, Holding } from "../api";
+import { api, changeClass, formatActionDetail, formatMoney, formatOrder, Holding } from "../api";
 
 export default function HoldingDetailPage() {
   const { ticker = "" } = useParams();
@@ -9,8 +9,6 @@ export default function HoldingDetailPage() {
   const [name, setName] = useState("");
   const [shares, setShares] = useState("");
   const [cost, setCost] = useState("");
-  const [stop, setStop] = useState("");
-  const [target, setTarget] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -27,8 +25,6 @@ export default function HoldingDetailPage() {
       setName(data.name || "");
       setShares(data.shares != null ? String(data.shares) : "");
       setCost(data.cost_basis != null ? String(data.cost_basis) : "");
-      setStop(data.stop_loss != null ? String(data.stop_loss) : "");
-      setTarget(data.target_price != null ? String(data.target_price) : "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
     } finally {
@@ -51,8 +47,6 @@ export default function HoldingDetailPage() {
       if (name.trim()) body.name = name.trim();
       if (shares.trim()) body.shares = Number(shares);
       if (cost.trim()) body.cost_basis = Number(cost);
-      if (stop.trim()) body.stop_loss = Number(stop);
-      if (target.trim()) body.target_price = Number(target);
       const updated = await api.updateHolding(ticker, body);
       setHolding(updated);
       setSaved(true);
@@ -108,17 +102,47 @@ export default function HoldingDetailPage() {
         </div>
       </div>
 
+      {(holding.stop_loss != null || holding.target_price != null) && (
+        <div className="card">
+          <div className="section-title">今日动态价位</div>
+          <div className="row">
+            <span className="muted">止损参考</span>
+            <span className="down">
+              {holding.stop_loss != null ? formatMoney(holding.stop_loss, currency) : "—"}
+            </span>
+          </div>
+          <div className="row">
+            <span className="muted">目标价</span>
+            <span className="up">
+              {holding.target_price != null ? formatMoney(holding.target_price, currency) : "—"}
+            </span>
+          </div>
+          {holding.buy_low != null && holding.buy_high != null && (
+            <div className="row">
+              <span className="muted">加仓区间</span>
+              <span>
+                {formatMoney(holding.buy_low, currency)} ~ {formatMoney(holding.buy_high, currency)}
+              </span>
+            </div>
+          )}
+          {holding.levels_note && <p className="muted">{holding.levels_note}</p>}
+        </div>
+      )}
+
       {holding.order && (
         <div className="card">
-          <div className="section-title">今日挂单</div>
-          <div className="title">{holding.order.side}</div>
-          <div>{formatOrder(holding)}</div>
+          <div className="section-title">今日操作</div>
+          <div className="holding-action-line">{formatActionDetail(holding)}</div>
+          {holding.order.legs?.length ? (
+            <div className="muted order-preview">{formatOrder(holding)}</div>
+          ) : null}
           <p className="muted pre-wrap">{holding.order.note}</p>
         </div>
       )}
 
       <form className="card" onSubmit={handleSave}>
         <div className="section-title">修改持仓</div>
+        <p className="muted">股数与成本会保存；止损/目标每日根据行情自动计算。</p>
         <label className="field">
           <span>名称</span>
           <input value={name} onChange={(e) => setName(e.target.value)} />
@@ -130,14 +154,6 @@ export default function HoldingDetailPage() {
         <label className="field">
           <span>成本价</span>
           <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>止损</span>
-          <input inputMode="decimal" value={stop} onChange={(e) => setStop(e.target.value)} placeholder="留空则不修改" />
-        </label>
-        <label className="field">
-          <span>目标价</span>
-          <input inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="留空则不修改" />
         </label>
         <button className="btn" type="submit" disabled={saving}>
           {saving ? "保存中…" : "保存"}

@@ -26,6 +26,12 @@ CASH_MODE_LABELS = {
 
 
 def get_market_cash_config() -> dict[str, dict[str, Any]]:
+    from domain.cash_repo import list_market_cash, seed_if_empty
+
+    seed_if_empty()
+    cash = list_market_cash()
+    if cash:
+        return cash
     return dict(_portfolio_settings().get("cash", {}))
 
 
@@ -134,10 +140,10 @@ def _resolve_portfolio_action(
 
     if user_stop is not None and price <= user_stop:
         action = "降低风险"
-        reasons.append(f"现价已触及/跌破自设止损 {_money(user_stop, rec.snapshot.currency)}")
+        reasons.append(f"现价已触及/跌破今日止损 {_money(user_stop, rec.snapshot.currency)}")
     elif user_target is not None and price >= user_target:
         action = "降低风险"
-        reasons.append(f"现价已达自设目标 {_money(user_target, rec.snapshot.currency)}，可考虑止盈")
+        reasons.append(f"现价已达今日目标 {_money(user_target, rec.snapshot.currency)}，可考虑止盈")
     elif cost_basis is not None and price < cost_basis * 0.92:
         if action == "继续观察":
             action = "降低风险"
@@ -254,7 +260,10 @@ def _fetch_upcoming_earnings(ticker: str, within_days: int = 14) -> str | None:
 def analyze_portfolio(
     recommendations: list[Recommendation],
     holdings_config: dict[str, Any] | None = None,
+    regimes: dict[str, Any] | None = None,
 ) -> PortfolioAnalysis:
+    from domain.dynamic_levels import compute_dynamic_levels
+
     config = holdings_config if holdings_config is not None else load_config().get("holdings", {})
     settings = _portfolio_settings()
     global_max_weight = float(settings.get("max_position_weight_pct", 25))
@@ -268,6 +277,9 @@ def analyze_portfolio(
     for rec in recommendations:
         info = config.get(rec.ticker, {}) or {}
         parsed = _parse_holding_config(info)
+        market_key = _holding_market(rec.ticker)
+        regime = (regimes or {}).get(market_key)
+        levels = compute_dynamic_levels(rec, regime)
         shares = parsed["shares"]
         price = rec.snapshot.price
         market_value = shares * price if shares is not None else None
@@ -288,8 +300,8 @@ def analyze_portfolio(
                 recommendation=rec,
                 shares=shares,
                 cost_basis=cost_basis,
-                user_target=parsed["user_target"],
-                user_stop=parsed["user_stop"],
+                user_target=levels.target_price,
+                user_stop=levels.stop_loss,
                 thesis=parsed["thesis"],
                 market_value=market_value,
                 pnl_amount=pnl_amount,
@@ -411,7 +423,7 @@ def format_portfolio_overview_section(analysis: PortfolioAnalysis) -> list[str]:
     lines = [
         "## 📊 持仓管家",
         "",
-        "> 基于成本、仓位与自设目标/止损的风险视图。",
+        "> 基于成本、仓位与今日动态目标/止损的风险视图。",
         "",
     ]
 
@@ -419,7 +431,7 @@ def format_portfolio_overview_section(analysis: PortfolioAnalysis) -> list[str]:
     if valued:
         lines.extend(
             [
-                "| 标的 | 仓位 | 浮盈亏 | 投资理由 | 自设目标 | 自设止损 |",
+                "| 标的 | 仓位 | 浮盈亏 | 投资理由 | 今日目标 | 今日止损 |",
                 "| --- | --- | --- | --- | --- | --- |",
             ]
         )

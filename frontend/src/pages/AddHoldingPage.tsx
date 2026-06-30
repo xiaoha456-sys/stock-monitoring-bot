@@ -2,6 +2,8 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 
+const INVALID_TICKERS = new Set(["NASDAQ", "NYSE", "AMEX"]);
+
 const MARKETS = [
   { value: "US", label: "美股" },
   { value: "CN", label: "A股" },
@@ -15,8 +17,6 @@ export default function AddHoldingPage() {
   const [name, setName] = useState("");
   const [shares, setShares] = useState("");
   const [cost, setCost] = useState("");
-  const [stop, setStop] = useState("");
-  const [target, setTarget] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -24,6 +24,11 @@ export default function AddHoldingPage() {
     e.preventDefault();
     if (!ticker.trim()) {
       setError("请填写股票代码");
+      return;
+    }
+    const code = ticker.trim().toUpperCase();
+    if (INVALID_TICKERS.has(code)) {
+      setError(`${code} 是交易所代码，请填写具体股票（如 SPCX、NVDA）`);
       return;
     }
     setSaving(true);
@@ -36,10 +41,8 @@ export default function AddHoldingPage() {
       if (name.trim()) body.name = name.trim();
       if (shares.trim()) body.shares = Number(shares);
       if (cost.trim()) body.cost_basis = Number(cost);
-      if (stop.trim()) body.stop_loss = Number(stop);
-      if (target.trim()) body.target_price = Number(target);
       const created = await api.createHolding(body);
-      navigate(`/holding/${encodeURIComponent(created.ticker)}`);
+      navigate(`/holding/${encodeURIComponent(created.ticker)}`, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "添加失败");
     } finally {
@@ -53,7 +56,7 @@ export default function AddHoldingPage() {
         ← 返回持仓
       </Link>
       <h1>添加持仓</h1>
-      <p className="muted">保存到服务器数据库，手机与电脑同步。</p>
+      <p className="muted">止损与目标价将在添加后按每日行情分析自动计算。</p>
 
       <form className="card" onSubmit={handleSubmit}>
         <label className="field">
@@ -86,14 +89,6 @@ export default function AddHoldingPage() {
         <label className="field">
           <span>成本价</span>
           <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>止损</span>
-          <input inputMode="decimal" value={stop} onChange={(e) => setStop(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>目标价</span>
-          <input inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} />
         </label>
         <button className="btn" type="submit" disabled={saving}>
           {saving ? "保存中…" : "添加"}

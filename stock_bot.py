@@ -246,18 +246,22 @@ def _default_currency(ticker: str) -> str:
     return "USD"
 
 
-def fetch_snapshot(ticker: str) -> StockSnapshot:
-    stock = yf.Ticker(ticker)
-    history = stock.history(period="2y", interval="1d", auto_adjust=True)
+def _snapshot_from_history(
+    ticker: str,
+    stock: yf.Ticker,
+    history: pd.DataFrame,
+    *,
+    short_history: bool = False,
+) -> StockSnapshot:
     close = history.get("Close", pd.Series(dtype=float)).dropna()
-    if len(close) < 200:
-        raise ValueError(f"only {len(close)} daily closes available; 200 required")
+    if len(close) < 2:
+        raise ValueError(f"only {len(close)} daily closes available")
 
     latest = float(close.iloc[-1])
     previous = float(close.iloc[-2])
-    year = history.loc[close.tail(252).index]
-    year_low = float(year["Low"].min())
-    year_high = float(year["High"].max())
+    window = history.loc[close.index]
+    year_low = float(window["Low"].min())
+    year_high = float(window["High"].max())
     range_size = year_high - year_low
     position = 50.0 if range_size == 0 else (latest - year_low) / range_size * 100
 
@@ -272,13 +276,22 @@ def fetch_snapshot(ticker: str) -> StockSnapshot:
     momentum_60d = (latest / float(close.iloc[-61]) - 1) * 100 if len(close) > 61 else 0.0
     volume = history.get("Volume", pd.Series(dtype=float)).dropna()
     volume_ratio = 1.0
-    if len(volume) >= 20:
-        avg_20 = float(volume.tail(20).mean())
-        if avg_20 > 0:
-            volume_ratio = float(volume.tail(5).mean()) / avg_20
+    if len(volume) >= 5:
+        tail = min(20, len(volume))
+        avg = float(volume.tail(tail).mean())
+        if avg > 0:
+            volume_ratio = float(volume.tail(min(5, len(volume))).mean()) / avg
     returns = close.pct_change().dropna()
-    volatility_20d = float(returns.tail(20).std() * 100) if len(returns) >= 20 else 0.0
+    vol_tail = min(20, len(returns))
+    volatility_20d = float(returns.tail(vol_tail).std() * 100) if vol_tail >= 2 else 0.0
     news_items = fetch_headlines(ticker)
+
+    sma_20 = float(close.tail(min(20, len(close))).mean())
+    sma_50 = float(close.tail(min(50, len(close))).mean())
+    sma_200 = float(close.tail(200).mean()) if len(close) >= 200 else float(close.mean())
+
+    rsi_series = calculate_rsi(close)
+    rsi_14 = float(rsi_series.iloc[-1]) if len(rsi_series.dropna()) else 50.0
 
     return StockSnapshot(
         ticker=ticker,
@@ -288,10 +301,10 @@ def fetch_snapshot(ticker: str) -> StockSnapshot:
         week_52_low=year_low,
         week_52_high=year_high,
         week_52_position=max(0.0, min(position, 100.0)),
-        rsi_14=float(calculate_rsi(close).iloc[-1]),
-        sma_50=float(close.tail(50).mean()),
-        sma_200=float(close.tail(200).mean()),
-        sma_20=float(close.tail(20).mean()),
+        rsi_14=rsi_14,
+        sma_50=sma_50,
+        sma_200=sma_200,
+        sma_20=sma_20,
         atr_14=calculate_atr(history),
         headlines=tuple(title for title, _ in news_items),
         headline_links=tuple(url for _, url in news_items),
@@ -300,6 +313,51 @@ def fetch_snapshot(ticker: str) -> StockSnapshot:
         volume_ratio=volume_ratio,
         volatility_20d=volatility_20d,
     )
+
+
+def fetch_snapshot(ticker: str) -> StockSnapshot:
+    stock = yf.Ticker(ticker)
+    history = stock.history(period="2y", interval="1d", auto_adjust=True)
+    close = history.get("Close", pd.Series(dtype=float)).dropna()
+    if len(close) >= 200:
+        return _snapshot_from_history(ticker, stock, history)
+    if len(close) >= 5:
+        print(
+            f"Warning: {ticker} has only {len(close)} trading days; using short-history snapshot",
+            file=sys.stderr,
+        )
+        return _snapshot_from_history(ticker, stock, history, short_history=True)
+
+    try:
+        fast = stock.fast_info
+        price = float(fast.get("last_price") or fast.get("regular_market_price") or 0)
+    except Exception:
+        price = 0.0
+    if price > 0:
+        currency = _default_currency(ticker)
+        try:
+            currency = str(stock.fast_info.get("currency") or currency)
+        except Exception:
+            pass
+        print(f"Warning: {ticker} has minimal history; using last price only", file=sys.stderr)
+        return StockSnapshot(
+            ticker=ticker,
+            price=price,
+            currency=currency,
+            change_pct=0.0,
+            week_52_low=price * 0.9,
+            week_52_high=price * 1.1,
+            week_52_position=50.0,
+            rsi_14=50.0,
+            sma_50=price,
+            sma_200=price,
+            sma_20=price,
+            atr_14=max(price * 0.03, 0.01),
+            headlines=(),
+            headline_links=(),
+        )
+
+    raise ValueError(f"only {len(close)} daily closes available; 5 required")
 
 
 def _trend_text(snapshot: StockSnapshot) -> str:
@@ -995,9 +1053,9 @@ def build_combined_report(
     radar: tuple[list[Any], dict[str, str]] | None = None,
     cn_funds: tuple[list[Recommendation], dict[str, str]] | None = None,
 ) -> str:
-    from morning_brief import compose_morning_brief
+    from morning_brief import compose_email_report
 
-    return compose_morning_brief(
+    return compose_email_report(
         market_reports,
         now=now,
         regimes=regimes,

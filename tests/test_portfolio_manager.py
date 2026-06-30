@@ -59,15 +59,14 @@ class PortfolioManagerTests(unittest.TestCase):
         self.assertAlmostEqual(nvda.weight_pct, 100 * 20000 / (20000 + 50000), places=1)
         self.assertGreater(analysis.market_weights["US"], 99)
 
-    def test_user_stop_triggers_reduce_risk(self):
+    def test_dynamic_stop_triggers_reduce_risk(self):
         config = {
             "NVDA": {
                 "shares": 10,
                 "cost_basis": 180,
-                "stop_loss": 205,
             }
         }
-        analysis = analyze_portfolio([_rec("NVDA", price=200)], config)
+        analysis = analyze_portfolio([_rec("NVDA", price=175)], config)
         self.assertEqual(analysis.holdings[0].portfolio_action, "降低风险")
         self.assertIn("止损", analysis.holdings[0].action_reasons[0])
 

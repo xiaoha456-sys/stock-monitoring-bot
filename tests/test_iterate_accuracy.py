@@ -97,7 +97,7 @@ class IterateAccuracyTests(unittest.TestCase):
             )
             fetch_range.return_value = (105.0, 99.0, 108.0)
             now = datetime(2026, 6, 12, 10, tzinfo=ZoneInfo("Australia/Sydney"))
-            with patch("iterate_accuracy.PREDICTIONS_DIR", pred_dir):
+            with patch("domain.predictions_repo.PREDICTIONS_DIR", pred_dir):
                 stats = collect_market_stats(horizon=5, now=now)
             self.assertIn("US", stats["picks"])
             self.assertEqual(stats["picks"]["US"]["count"], 1)

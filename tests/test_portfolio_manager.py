@@ -128,9 +128,35 @@ class PortfolioManagerTests(unittest.TestCase):
         self.assertIn("减仓", analysis.holdings[0].action_reasons[-1])
 
     def test_format_cash_constraints_section(self):
+        from unittest.mock import patch
+
         from portfolio_manager import format_cash_constraints_section
 
-        text = "\n".join(format_cash_constraints_section())
+        cash = {
+            "US": {
+                "available": 30000,
+                "currency": "AUD",
+                "mode": "deploy",
+                "can_add_capital": True,
+                "note": "可加仓",
+            },
+            "CN": {
+                "available": 0,
+                "currency": "CNY",
+                "mode": "rotate_only",
+                "can_add_capital": False,
+                "note": "无闲置资金",
+            },
+            "AU": {
+                "available": 0,
+                "currency": "AUD",
+                "mode": "rotate_only",
+                "can_add_capital": False,
+                "note": "无闲置资金",
+            },
+        }
+        with patch("portfolio_manager.get_market_cash_config", return_value=cash):
+            text = "\n".join(format_cash_constraints_section())
         self.assertIn("资金约束", text)
         self.assertIn("美股", text)
         self.assertIn("仅减仓置换", text)

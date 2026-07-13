@@ -2,8 +2,8 @@ name: Daily stock report
 
 on:
   schedule:
-    # 悉尼时间周一至周五 09:00（不含周六日）
-    - cron: "0 9 * * 1-5"
+    # 悉尼时间周一至周六 09:00（周六专门跑周度复盘）
+    - cron: "0 9 * * 1-6"
       timezone: "Australia/Sydney"
   workflow_dispatch:
 
@@ -23,6 +23,20 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Restore prediction database
+        id: cache-db
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/portfolio.db
+            data/predictions
+            data/review_scores.json
+          key: portfolio-persist-${{ runner.os }}-v3-${{ github.run_id }}
+          restore-keys: |
+            portfolio-persist-${{ runner.os }}-v3-
+            portfolio-persist-${{ runner.os }}-
+            portfolio-db-${{ runner.os }}-
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -32,21 +46,26 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --requirement requirements.txt
 
-      - name: Run tests
-        run: python -m unittest discover -s tests
-
-      - name: Check weekly review day (Saturday)
+      # 发信优先：测试失败不应再阻断每日邮件
+      - name: Check weekly review day (Friday or Saturday)
         id: weekly
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run_review=true" >> "$GITHUB_OUTPUT"
+            echo "run_daily=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           DOW=$(TZ=Australia/Sydney date +%u)
-          if [ "$DOW" = "6" ]; then
+          # 5=周五、6=周六：发复盘；周六跳过日常选股邮件
+          if [ "$DOW" = "5" ] || [ "$DOW" = "6" ]; then
             echo "run_review=true" >> "$GITHUB_OUTPUT"
           else
             echo "run_review=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$DOW" = "6" ]; then
+            echo "run_daily=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_daily=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Review past predictions (weekly T+5)
@@ -74,6 +93,7 @@ jobs:
         run: python stock_bot.py --iterate
 
       - name: Generate and send market reports
+        if: steps.weekly.outputs.run_daily == 'true'
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -83,3 +103,6 @@ jobs:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
         run: python stock_bot.py
+
+      - name: Run tests
+        run: python -m unittest discover -s tests

@@ -130,11 +130,14 @@ class StockBotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             env_file = Path(tmp) / ".env"
             env_file.write_text("SMTP_HOST=from-dotenv\nEMAIL_FROM=dotenv@example.com\n", encoding="utf-8")
-            with patch.dict("os.environ", {"SMTP_HOST": "existing"}, clear=False):
+            with patch.dict(
+                "os.environ",
+                {"SMTP_HOST": "existing"},
+                clear=True,
+            ):
                 load_dotenv(env_file)
                 self.assertEqual(os.environ["SMTP_HOST"], "existing")
                 self.assertEqual(os.environ["EMAIL_FROM"], "dotenv@example.com")
-            os.environ.pop("EMAIL_FROM", None)
 
     @patch.dict(
         "os.environ",
@@ -326,81 +329,67 @@ class StockBotTests(unittest.TestCase):
         self.assertGreaterEqual(result["score"], 60)
         self.assertTrue(result["target_hit"])
 
-    @patch("stock_bot.PREDICTIONS_DIR")
-    @patch("stock_bot.REVIEW_SCORES_PATH")
+    @patch("stock_bot.load_prediction_snapshot")
+    @patch("stock_bot.append_review_run")
     @patch("stock_bot._fetch_price_range")
     def test_review_predictions_reads_saved_file(
         self,
         fetch_range: Mock,
-        review_path: Mock,
-        predictions_dir: Mock,
+        append_review: Mock,
+        load_snapshot: Mock,
     ):
-        with tempfile.TemporaryDirectory() as tmp:
-            pred_dir = Path(tmp) / "predictions"
-            pred_dir.mkdir()
-            signal_date = (datetime.now(ZoneInfo("Australia/Sydney")) - pd.Timedelta(days=1)).strftime(
-                "%Y-%m-%d"
-            )
-            payload = {
-                "date": signal_date,
-                "markets": {
-                    "US": {
-                        "picks": [
-                            {
-                                "ticker": "NVDA",
-                                "action": "买入",
-                                "score": 80,
-                                "price_at_signal": 100,
-                                "currency": "USD",
-                                "buy_low": 95,
-                                "buy_high": 98,
-                                "target_price": 110,
-                                "stop_loss": 90,
-                            }
-                        ],
-                        "watchlist": [],
-                    }
-                },
-                "holdings": {
-                    "US": [
+        signal_date = (datetime.now(ZoneInfo("Australia/Sydney")) - pd.Timedelta(days=1)).strftime(
+            "%Y-%m-%d"
+        )
+        payload = {
+            "date": signal_date,
+            "markets": {
+                "US": {
+                    "picks": [
                         {
-                            "ticker": "MU",
-                            "name": "美光",
-                            "action": "观望",
-                            "score": 55,
-                            "price_at_signal": 200,
+                            "ticker": "NVDA",
+                            "action": "买入",
+                            "score": 80,
+                            "price_at_signal": 100,
                             "currency": "USD",
-                            "buy_low": 190,
-                            "buy_high": 198,
-                            "target_price": 220,
-                            "stop_loss": 180,
+                            "buy_low": 95,
+                            "buy_high": 98,
+                            "target_price": 110,
+                            "stop_loss": 90,
                         }
-                    ]
-                },
-            }
-            (pred_dir / f"{signal_date}.json").write_text(
-                json.dumps(payload), encoding="utf-8"
-            )
-            review_file = Path(tmp) / "review_scores.json"
+                    ],
+                    "watchlist": [],
+                }
+            },
+            "holdings": {
+                "US": [
+                    {
+                        "ticker": "MU",
+                        "name": "美光",
+                        "action": "观望",
+                        "score": 55,
+                        "price_at_signal": 200,
+                        "currency": "USD",
+                        "buy_low": 190,
+                        "buy_high": 198,
+                        "target_price": 220,
+                        "stop_loss": 180,
+                    }
+                ]
+            },
+        }
+        load_snapshot.return_value = payload
+        append_review.side_effect = lambda run: {"runs": [run]}
 
-            predictions_dir.__truediv__ = lambda _self, name: pred_dir / name
-            predictions_dir.mkdir = Mock()
-            review_path.exists.return_value = False
-            review_path.parent = review_file.parent
-            review_path.__str__ = lambda _self: str(review_file)
-            review_path.write_text = lambda content, encoding="utf-8": review_file.write_text(
-                content, encoding=encoding
-            )
-
-            fetch_range.return_value = (105.0, 96.0, 108.0)
-            report, payload_out = review_predictions(horizons=[1])
-            self.assertIn("NVDA", report)
-            self.assertIn("MU", report)
-            self.assertIn("观察池推荐", report)
-            self.assertIn("持仓操作", report)
-            self.assertIn("T+1", report)
-            self.assertIn("holdings", payload_out["horizons"]["T+1"])
-            self.assertTrue(review_file.exists())
+        fetch_range.return_value = (105.0, 96.0, 108.0)
+        report, payload_out = review_predictions(horizons=[1])
+        self.assertIn("NVDA", report)
+        self.assertIn("MU", report)
+        self.assertIn("观察池推荐", report)
+        self.assertIn("持仓操作", report)
+        self.assertIn("T+1", report)
+        self.assertIn("holdings", payload_out["horizons"]["T+1"])
+        append_review.assert_called_once()
 
 
 if __name__ == "__main__":

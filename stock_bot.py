@@ -30,7 +30,9 @@ from market_regime import (
     select_picks_with_regime,
 )
 from domain.config import load_config, load_config_raw
-from domain.paths import CONFIG_PATH, PREDICTIONS_DIR, REVIEW_SCORES_PATH, ROOT, SYDNEY
+from domain.paths import CONFIG_PATH, PREDICTIONS_DIR, ROOT, SYDNEY
+from domain.predictions_repo import load_prediction_snapshot, save_prediction_snapshot
+from domain.review_repo import append_review_run
 from tuning import (
     get_market_tuning,
     get_price_level_params,
@@ -1228,10 +1230,8 @@ def save_predictions(
             block["alphasift"] = extras["alphasift"]
         payload["markets"][market_key] = block
 
-    PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
-    path = PREDICTIONS_DIR / f"{date_key}.json"
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    return path
+    save_prediction_snapshot(date_key, payload)
+    return PREDICTIONS_DIR / f"{date_key}.json"
 
 
 def _fetch_price_range(ticker: str, start: datetime, end: datetime) -> tuple[float, float, float] | None:
@@ -1332,10 +1332,9 @@ def review_predictions(
             weekly_picks: list[dict[str, Any]] = []
             weekly_holdings: list[dict[str, Any]] = []
             for signal_date in week_dates:
-                path = PREDICTIONS_DIR / f"{signal_date}.json"
-                if not path.exists():
+                payload = load_prediction_snapshot(signal_date)
+                if not payload:
                     continue
-                payload = json.loads(path.read_text(encoding="utf-8"))
                 market_block = payload.get("markets", {}).get(market_key) or {}
                 weekly_picks.extend(market_block.get("picks", []) or [])
                 weekly_holdings.extend((payload.get("holdings") or {}).get(market_key, []) or [])
@@ -1371,15 +1370,14 @@ def review_predictions(
 
     for horizon in horizons:
         signal_date = (report_time - timedelta(days=horizon)).strftime("%Y-%m-%d")
-        path = PREDICTIONS_DIR / f"{signal_date}.json"
-        if not path.exists():
+        payload = load_prediction_snapshot(signal_date)
+        if not payload:
             lines.append(f"## T+{horizon}（{signal_date}）")
             lines.append("")
             lines.append(f"_未找到 {signal_date} 的推送记录，跳过。_")
             lines.append("")
             continue
 
-        payload = json.loads(path.read_text(encoding="utf-8"))
         start = datetime.strptime(signal_date, "%Y-%m-%d").replace(tzinfo=SYDNEY)
         end = report_time
         horizon_result: dict[str, Any] = {
@@ -1427,18 +1425,11 @@ def review_predictions(
 
         review_payload["horizons"][f"T+{horizon}"] = horizon_result
 
-    if REVIEW_SCORES_PATH.exists():
-        history = json.loads(REVIEW_SCORES_PATH.read_text(encoding="utf-8"))
-    else:
-        history = {"runs": []}
-    history["runs"].append(review_payload)
-    history["runs"] = history["runs"][-60:]
-    REVIEW_SCORES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REVIEW_SCORES_PATH.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
+    append_review_run(review_payload)
 
     lines.append("---")
     lines.append("")
-    lines.append("复盘结果已写入 `data/review_scores.json`。观察池推荐与持仓操作分开统计准确率。")
+    lines.append("复盘结果已写入数据库及 `data/review_scores.json`。观察池推荐与持仓操作分开统计准确率。")
     return "\n".join(lines), review_payload
 
 

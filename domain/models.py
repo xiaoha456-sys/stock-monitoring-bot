@@ -58,3 +58,19 @@ class MarketCashRow(Base):
             "can_add_capital": self.can_add_capital,
             "note": self.note,
         }
+
+
+class PredictionSnapshotRow(Base):
+    __tablename__ = "prediction_snapshots"
+
+    signal_date: Mapped[str] = mapped_column(String(10), primary_key=True)
+    generated_at: Mapped[datetime] = mapped_column(DateTime)
+    payload: Mapped[str] = mapped_column(Text)
+
+
+class ReviewHistoryRow(Base):
+    __tablename__ = "review_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    payload: Mapped[str] = mapped_column(Text, default='{"runs": []}')
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -134,6 +134,16 @@
       "thesis": "HBM 存储周期",
       "max_weight_pct": null
     },
+    "QCOM": {
+      "name": "Qualcomm",
+      "market": "US",
+      "shares": 10,
+      "cost_basis": 200,
+      "target_price": null,
+      "stop_loss": null,
+      "thesis": "移动芯片与汽车电子",
+      "max_weight_pct": null
+    },
     "RKLB": {
       "name": "Rocket Lab",
       "market": "US",

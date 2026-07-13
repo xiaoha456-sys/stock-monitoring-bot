@@ -28,7 +28,8 @@ from domain.holdings import update_holding
 from domain.holdings_repo import delete_holding, get_holding_record, seed_if_empty, upsert_holding
 from domain.paths import ROOT
 from domain.portfolio import build_holdings_list
-from domain.tickers import normalize_ticker
+from domain.predictions_repo import import_files_if_empty
+from domain.review_repo import import_file_if_empty
 
 load_dotenv(ROOT / ".env")
 
@@ -121,6 +122,8 @@ async def lifespan(_: FastAPI):
     init_db()
     seed_if_empty()
     seed_cash_if_empty()
+    import_files_if_empty()
+    import_file_if_empty()
     yield
 
 

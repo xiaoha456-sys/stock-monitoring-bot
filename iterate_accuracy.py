@@ -12,12 +12,11 @@ from zoneinfo import ZoneInfo
 
 from stock_bot import (
     MARKET_ORDER,
-    PREDICTIONS_DIR,
-    REVIEW_SCORES_PATH,
     _grade_prediction,
     _fetch_price_range,
     load_config,
 )
+from domain.predictions_repo import iter_prediction_snapshots
 from tuning import (
     DEFAULT_TUNING,
     append_tuning_history,
@@ -115,16 +114,15 @@ def collect_market_stats(
     picks_stats: dict[str, dict[str, Any]] = {}
     holdings_stats: dict[str, dict[str, Any]] = {}
 
-    for path in sorted(PREDICTIONS_DIR.glob("*.json")):
+    for signal_date, payload in iter_prediction_snapshots():
         try:
-            signal_day = datetime.strptime(path.stem, "%Y-%m-%d").replace(tzinfo=SYDNEY)
+            signal_day = datetime.strptime(signal_date, "%Y-%m-%d").replace(tzinfo=SYDNEY)
         except ValueError:
             continue
         elapsed = (report_time.date() - signal_day.date()).days
         if elapsed < horizon:
             continue
 
-        payload = json.loads(path.read_text(encoding="utf-8"))
         day_picks, day_holdings = _collect_day_stats(payload, signal_day, end, elapsed)
         for market_key, bucket in day_picks.items():
             target = picks_stats.setdefault(
